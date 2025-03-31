@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package api;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+
+// Product represents a product in the catalog
+message Product {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  double price = 4;
+  int32 stock = 5;
+}
+
+// GetProductRequest is used to fetch a product by ID
+message GetProductRequest {
+  string product_id = 1;
+}
+
+// ListProductsRequest is used to list products with pagination
+message ListProductsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string search_query = 3;
+}
+
+// ListProductsResponse contains a list of products
+message ListProductsResponse {
+  repeated Product products = 1;
+  int32 total_count = 2;
+}
+
+// ProductService provides methods to manage products
+service ProductService {
+  // GetProduct retrieves a product by ID
+  rpc GetProduct(GetProductRequest) returns (Product) {
+    option (google.api.http) = {
+      get: "/products/{product_id}"
+    };
+  }
+  
+  // ListProducts lists products with filtering and pagination
+  rpc ListProducts(ListProductsRequest) returns (ListProductsResponse) {
+    option (google.api.http) = {
+      get: "/products"
+    };
+  }
+  
+  // CreateProduct creates a new product
+  rpc CreateProduct(Product) returns (Product) {
+    option (google.api.http) = {
+      post: "/products"
+      body: "*"
+    };
+  }
+  
+  // UpdateProduct updates an existing product
+  rpc UpdateProduct(Product) returns (Product) {
+    option (google.api.http) = {
+      put: "/products/{id}"
+      body: "*"
+    };
+  }
+  
+  // DeleteProduct deletes a product
+  rpc DeleteProduct(GetProductRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/products/{product_id}"
+    };
+  }
+  
+  // Health check endpoint
+  rpc Liveness(google.protobuf.Empty) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      get: "/liveness"
+    };
+  }
+}

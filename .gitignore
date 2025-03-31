@@ -1,0 +1,44 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go specific
+/vendor/
+/Godeps/
+.glide/
+.idea/
+.vscode/
+*.iml
+
+# Output of the go coverage tool
+*.cover
+
+# Dependency directories (remove the comment below if you want to check in vendor dependencies)
+# vendor/
+
+# Build output
+bin/
+release/
+dist/
+build/
+
+# Debug files
+debug
+
+# macOS specific files
+.DS_Store
+
+# Log files
+*.log
+
+# Environment variable files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

@@ -1,0 +1,34 @@
+// {{ .Name }}Handler is the interface for {{ .Name }} HTTP handlers
+type {{ .Name }}Handler interface {
+{{- range .Methods }}
+    Handle{{ .Name }}(w http.ResponseWriter, r *http.Request)
+{{- end }}
+}
+
+// Register{{ .Name }}Routes registers HTTP routes for {{ .Name }}
+func Register{{ .Name }}Routes(r Routes, handler {{ .Name }}Handler) {
+{{- range $method := .Methods }}
+{{- range $method.HTTPRules }}
+    r.HandleFunc("{{ .Method }}", "{{ .Pattern }}", handler.Handle{{ $method.Name }})
+{{- end }}
+{{- end }}
+}
+
+// Register{{ .Name }}Routes is a method on RouteGroup to register all {{ .Name }} routes
+func (g *RouteGroup) Register{{ .Name }}Routes(handler {{ .Name }}Handler) {
+    Register{{ .Name }}Routes(g, handler)
+}
+
+{{- range $method := .Methods }}
+{{- range $method.HTTPRules }}
+// Register{{ $method.Name }}Route is a helper that registers the {{ $method.Name }} handler
+func Register{{ $method.Name }}Route(r Routes, handler {{ $.Name }}Handler, middlewares ...Middleware) {
+    r.HandleFunc("{{ .Method }}", "{{ .Pattern }}", handler.Handle{{ $method.Name }}, middlewares...)
+}
+
+// Register{{ $method.Name }} is a method on RouteGroup to register the {{ $method.Name }} handler
+func (g *RouteGroup) Register{{ $method.Name }}(handler {{ $.Name }}Handler, middlewares ...Middleware) {
+    Register{{ $method.Name }}Route(g, handler, middlewares...)
+}
+{{- end }}
+{{- end }}
