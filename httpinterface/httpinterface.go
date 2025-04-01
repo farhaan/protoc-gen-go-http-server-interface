@@ -26,6 +26,8 @@ var (
 type Generator struct {
 	// ParsedTemplates contains the parsed templates for code generation
 	ParsedTemplates *template.Template
+	// Options contains the plugin options
+	Options *Options
 }
 
 // ServiceData contains the data for a service definition.
@@ -71,12 +73,21 @@ func New() *Generator {
 
 	return &Generator{
 		ParsedTemplates: tmpl,
+		Options:         &Options{},
 	}
 }
 
 // Generate generates the HTTP interface code.
 func (g *Generator) Generate(req *plugin.CodeGeneratorRequest) *plugin.CodeGeneratorResponse {
 	resp := new(plugin.CodeGeneratorResponse)
+
+	// Parse options from parameter
+	options, err := ParseOptions(req.GetParameter())
+	if err != nil {
+		resp.Error = proto.String(fmt.Sprintf("invalid options: %v", err))
+		return resp
+	}
+	g.Options = options
 
 	// Process each proto file
 	for _, file := range req.ProtoFile {
@@ -104,10 +115,21 @@ func (g *Generator) Generate(req *plugin.CodeGeneratorRequest) *plugin.CodeGener
 
 		// Add the file to the response
 		filename := g.outputFilename(file.GetName())
-		resp.File = append(resp.File, &plugin.CodeGeneratorResponse_File{
+		outputFile := &plugin.CodeGeneratorResponse_File{
 			Name:    proto.String(filename),
 			Content: proto.String(content),
-		})
+		}
+
+		// Handle source_relative paths option
+		if g.Options.PathsSourceRelative {
+			// Get directory of the proto file
+			dir := filepath.Dir(file.GetName())
+			if dir != "." {
+				outputFile.Name = proto.String(filepath.Join(dir, filename))
+			}
+		}
+
+		resp.File = append(resp.File, outputFile)
 	}
 
 	return resp
@@ -202,7 +224,15 @@ func (g *Generator) generateCode(data *ServiceData) (string, error) {
 // outputFilename returns the output filename for a proto file.
 func (g *Generator) outputFilename(protoFilename string) string {
 	base := filepath.Base(protoFilename)
-	return strings.TrimSuffix(base, ".proto") + "_http.pb.go"
+	filename := strings.TrimSuffix(base, ".proto")
+
+	if g.Options.OutputPrefix != "" {
+		filename = g.Options.OutputPrefix + "_" + filename
+	} else {
+		filename = filename + "_http"
+	}
+
+	return filename + ".pb.go"
 }
 
 // getPackageName returns the Go package name for a proto file.

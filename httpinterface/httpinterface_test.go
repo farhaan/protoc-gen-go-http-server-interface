@@ -263,24 +263,44 @@ func TestGenerateCode(t *testing.T) {
 	}
 }
 
-// Test outputFilename function
+// Test outputFilename method with different options
 func TestOutputFilename(t *testing.T) {
-	g := New()
-
 	tests := []struct {
-		input    string
-		expected string
+		name          string
+		protoFilename string
+		options       *Options
+		want          string
 	}{
-		{"foo.proto", "foo_http.pb.go"},
-		{"path/to/bar.proto", "bar_http.pb.go"},
-		{"baz", "baz_http.pb.go"},
+		{
+			name:          "default options",
+			protoFilename: "service.proto",
+			options:       &Options{},
+			want:          "service_http.pb.go",
+		},
+		{
+			name:          "with output prefix",
+			protoFilename: "service.proto",
+			options:       &Options{OutputPrefix: "api"},
+			want:          "api_service.pb.go",
+		},
+		{
+			name:          "nested proto file with default options",
+			protoFilename: "api/v1/service.proto",
+			options:       &Options{},
+			want:          "service_http.pb.go",
+		},
 	}
 
-	for _, test := range tests {
-		result := g.outputFilename(test.input)
-		if result != test.expected {
-			t.Errorf("outputFilename(%q) = %q, want %q", test.input, result, test.expected)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := New()
+			g.Options = tt.options
+
+			got := g.outputFilename(tt.protoFilename)
+			if got != tt.want {
+				t.Errorf("outputFilename(%q) = %q, want %q", tt.protoFilename, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -653,5 +673,228 @@ func TestGenerateWithMultipleFiles(t *testing.T) {
 	file := resp.File[0]
 	if file.GetName() != "file1_http.pb.go" {
 		t.Errorf("File.Name = %q, want %q", file.GetName(), "file1_http.pb.go")
+	}
+}
+
+// Test ParseOptions function
+func TestParseOptions(t *testing.T) {
+	tests := []struct {
+		name           string
+		parameter      string
+		wantRelative   bool
+		wantPrefix     string
+		wantErrContain string
+	}{
+		{
+			name:         "empty parameter",
+			parameter:    "",
+			wantRelative: false,
+			wantPrefix:   "",
+		},
+		{
+			name:         "paths=source_relative",
+			parameter:    "paths=source_relative",
+			wantRelative: true,
+			wantPrefix:   "",
+		},
+		{
+			name:         "paths=import",
+			parameter:    "paths=import",
+			wantRelative: false,
+			wantPrefix:   "",
+		},
+		{
+			name:         "output_prefix=custom",
+			parameter:    "output_prefix=custom",
+			wantRelative: false,
+			wantPrefix:   "custom",
+		},
+		{
+			name:         "multiple valid options",
+			parameter:    "paths=source_relative,output_prefix=custom",
+			wantRelative: true,
+			wantPrefix:   "custom",
+		},
+		{
+			name:           "invalid paths value",
+			parameter:      "paths=unknown",
+			wantErrContain: "unknown paths option",
+		},
+		{
+			name:           "invalid parameter format",
+			parameter:      "invalid-format",
+			wantErrContain: "invalid parameter",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts, err := ParseOptions(tt.parameter)
+
+			// Check error cases
+			if tt.wantErrContain != "" {
+				if err == nil {
+					t.Errorf("ParseOptions(%q) should have returned an error containing %q", tt.parameter, tt.wantErrContain)
+				} else if !strings.Contains(err.Error(), tt.wantErrContain) {
+					t.Errorf("ParseOptions(%q) error = %v, should contain %q", tt.parameter, err, tt.wantErrContain)
+				}
+				return
+			}
+
+			// Check non-error cases
+			if err != nil {
+				t.Errorf("ParseOptions(%q) unexpected error: %v", tt.parameter, err)
+				return
+			}
+
+			if opts.PathsSourceRelative != tt.wantRelative {
+				t.Errorf("ParseOptions(%q) PathsSourceRelative = %v, want %v", tt.parameter, opts.PathsSourceRelative, tt.wantRelative)
+			}
+
+			if opts.OutputPrefix != tt.wantPrefix {
+				t.Errorf("ParseOptions(%q) OutputPrefix = %q, want %q", tt.parameter, opts.OutputPrefix, tt.wantPrefix)
+			}
+		})
+	}
+}
+
+// Test Generate function with different options
+func TestGenerateWithOptions(t *testing.T) {
+	// Save the original functions and restore them after the test
+	originalGetHTTPRules := GetHTTPRules
+	GetHTTPRules = mockGetHTTPRules
+	defer func() { GetHTTPRules = originalGetHTTPRules }()
+
+	tests := []struct {
+		name           string
+		parameter      string
+		fileToGenerate string
+		protoFile      *descriptor.FileDescriptorProto
+		wantFilename   string
+	}{
+		{
+			name:           "default options",
+			parameter:      "",
+			fileToGenerate: "test.proto",
+			protoFile: &descriptor.FileDescriptorProto{
+				Name:    proto.String("test.proto"),
+				Package: proto.String("test"),
+				Service: []*descriptor.ServiceDescriptorProto{
+					{
+						Name: proto.String("TestService"),
+						Method: []*descriptor.MethodDescriptorProto{
+							{
+								Name:       proto.String("MethodWithHTTP"),
+								InputType:  proto.String(".test.Request"),
+								OutputType: proto.String(".test.Response"),
+							},
+						},
+					},
+				},
+			},
+			wantFilename: "test_http.pb.go",
+		},
+		{
+			name:           "paths=source_relative with nested proto",
+			parameter:      "paths=source_relative",
+			fileToGenerate: "api/v1/test.proto",
+			protoFile: &descriptor.FileDescriptorProto{
+				Name:    proto.String("api/v1/test.proto"),
+				Package: proto.String("test"),
+				Service: []*descriptor.ServiceDescriptorProto{
+					{
+						Name: proto.String("TestService"),
+						Method: []*descriptor.MethodDescriptorProto{
+							{
+								Name:       proto.String("MethodWithHTTP"),
+								InputType:  proto.String(".test.Request"),
+								OutputType: proto.String(".test.Response"),
+							},
+						},
+					},
+				},
+			},
+			wantFilename: "api/v1/test_http.pb.go",
+		},
+		{
+			name:           "custom output prefix",
+			parameter:      "output_prefix=api",
+			fileToGenerate: "test.proto",
+			protoFile: &descriptor.FileDescriptorProto{
+				Name:    proto.String("test.proto"),
+				Package: proto.String("test"),
+				Service: []*descriptor.ServiceDescriptorProto{
+					{
+						Name: proto.String("TestService"),
+						Method: []*descriptor.MethodDescriptorProto{
+							{
+								Name:       proto.String("MethodWithHTTP"),
+								InputType:  proto.String(".test.Request"),
+								OutputType: proto.String(".test.Response"),
+							},
+						},
+					},
+				},
+			},
+			wantFilename: "api_test.pb.go",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := New()
+
+			req := &plugin.CodeGeneratorRequest{
+				Parameter:      proto.String(tt.parameter),
+				FileToGenerate: []string{tt.fileToGenerate},
+				ProtoFile:      []*descriptor.FileDescriptorProto{tt.protoFile},
+			}
+
+			resp := g.Generate(req)
+
+			if resp.Error != nil {
+				t.Fatalf("Generate() returned error: %s", *resp.Error)
+			}
+
+			if len(resp.File) != 1 {
+				t.Fatalf("len(resp.File) = %d, want 1", len(resp.File))
+			}
+
+			file := resp.File[0]
+			if file.GetName() != tt.wantFilename {
+				t.Errorf("File.Name = %q, want %q", file.GetName(), tt.wantFilename)
+			}
+		})
+	}
+}
+
+// Test Generate function with invalid options
+func TestGenerateWithInvalidOptions(t *testing.T) {
+	g := New()
+
+	req := &plugin.CodeGeneratorRequest{
+		Parameter:      proto.String("paths=invalid"),
+		FileToGenerate: []string{"test.proto"},
+		ProtoFile: []*descriptor.FileDescriptorProto{
+			{
+				Name:    proto.String("test.proto"),
+				Package: proto.String("test"),
+			},
+		},
+	}
+
+	resp := g.Generate(req)
+
+	if resp.Error == nil {
+		t.Fatal("Generate() should have returned an error for invalid options")
+	}
+
+	if !strings.Contains(*resp.Error, "invalid options") {
+		t.Errorf("Error = %q, should contain 'invalid options'", *resp.Error)
+	}
+
+	// The response should not contain any files when there's an error
+	if len(resp.File) != 0 {
+		t.Errorf("len(resp.File) = %d, want 0", len(resp.File))
 	}
 }
