@@ -24,7 +24,7 @@ func TestCompileGeneratedCode(t *testing.T) {
 	goModPath := filepath.Join(tempDir, "go.mod")
 	goModContent := `module example.com/test
 
-go 1.16
+go 1.24.1
 `
 	err = os.WriteFile(goModPath, []byte(goModContent), 0644)
 	if err != nil {

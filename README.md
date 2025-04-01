@@ -4,7 +4,7 @@ A Protocol Buffer code generator plugin that produces HTTP server interfaces and
 
 ## System Requirements
 
-- **Go**: Go 1.16 or higher
+- **Go**: Go 1.24.1 or higher
 - **Protocol Buffers**: protoc 3.14.0 or higher
 - **Google API Proto Files**: Required for HTTP annotations
   - Install with: `go get -u google.golang.org/genproto/googleapis/api/annotations`
@@ -366,6 +366,80 @@ The package includes comprehensive tests for:
 - Middleware ordering
 - Method chaining
 - Duplicate route protection
+
+
+## protoc-gen-go-http-server-interface Options
+
+The protoc-gen-go-http-server-interface plugin supports several command-line options to customize its behavior.
+
+### Option Format
+
+Options are passed to the plugin using the `opt` parameter in your `protoc` command or configuration files like `buf.gen.yaml`.
+
+For example:
+```yaml
+# In buf.gen.yaml
+plugins:
+  - local: protoc-gen-go-http-server-interface
+    out: pb
+    opt: paths=source_relative,output_prefix=api
+```
+
+Or with protoc directly:
+```bash
+protoc --go-http-server-interface_out=paths=source_relative,output_prefix=api:./out proto/service.proto
+```
+
+### Available Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `paths` | File path resolution mode. Set to `source_relative` to match the directory structure of the input .proto files, or `import` to use go import paths. | `import` |
+| `output_prefix` | Customize the prefix of the generated files. For example, if set to `api`, a file named `service.proto` will generate `api_service.pb.go` instead of `service_http.pb.go`. | (none) |
+
+### Example Usage
+
+#### Using source-relative paths
+
+This is particularly useful when you want to keep the generated code next to your proto files, maintaining the same directory structure.
+
+```yaml
+plugins:
+  - local: protoc-gen-go-http-server-interface
+    out: .
+    opt: paths=source_relative
+```
+
+With this option, if you have a proto file at `api/v1/service.proto`, the generated code will be at `api/v1/service_http.pb.go`.
+
+#### Custom output prefix
+
+If you want to give your generated files a consistent prefix:
+
+```yaml
+plugins:
+  - local: protoc-gen-go-http-server-interface
+    out: pb
+    opt: output_prefix=api
+```
+
+This will generate files like `api_service.pb.go` instead of the default `service_http.pb.go`.
+
+#### Combining options
+
+Options can be combined by separating them with commas:
+
+```yaml
+plugins:
+  - local: protoc-gen-go-http-server-interface
+    out: .
+    opt: paths=source_relative,output_prefix=api
+```
+
+This will:
+1. Place generated files in the same directory structure as source files
+2. Use the prefix `api_` for all generated files
+
 
 ## Contributing
 

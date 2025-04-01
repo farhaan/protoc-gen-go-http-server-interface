@@ -3,7 +3,7 @@
 //
 // Usage:
 //
-//	protoc --httpinterface_out=. path/to/file.proto
+//	protoc --httpinterface_out=paths=source_relative:. path/to/file.proto
 package main
 
 import (
@@ -19,9 +19,15 @@ import (
 )
 
 func main() {
-	// Flags can be used for plugin options
-	var flags flag.FlagSet
-	flags.Parse(os.Args[1:])
+	// Flags for debugging
+	var showVersion bool
+	flag.BoolVar(&showVersion, "version", false, "print the version and exit")
+	flag.Parse()
+
+	if showVersion {
+		fmt.Fprintf(os.Stderr, "protoc-gen-httpinterface 1.0.0\n")
+		os.Exit(0)
+	}
 
 	// Read input from stdin (protoc pipes input here)
 	data, err := io.ReadAll(os.Stdin)
