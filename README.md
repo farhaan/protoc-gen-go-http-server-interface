@@ -352,9 +352,8 @@ productRouter := productPb.NewRouter(sharedMux)
 userRouter := userPb.NewRouter(sharedMux)
 
 // Apply global middleware to each router
-productRouter.Use(productPb.Middlewarae(Logger()))
-userRouter.Use(userPb.Middlewarae(Logger()))
-
+productRouter.Use(productPb.Middleware(Logger()))
+userRouter.Use(userPb.Middleware(Logger()))
 // Create service and handler instances
 productService := productSvc.NewProductService()
 productHandler := productHandler.NewProductHandler(productService)
