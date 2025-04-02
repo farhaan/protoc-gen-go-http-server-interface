@@ -24,7 +24,7 @@ func TestCompileGeneratedCode(t *testing.T) {
 	goModPath := filepath.Join(tempDir, "go.mod")
 	goModContent := `module example.com/test
 
-go 1.22.1
+go 1.23
 `
 	err = os.WriteFile(goModPath, []byte(goModContent), 0644)
 	if err != nil {
@@ -216,7 +216,7 @@ func TestSharedMuxCompilation(t *testing.T) {
 	goModPath := filepath.Join(tempDir, "go.mod")
 	goModContent := `module example.com/test
 
-go 1.22
+go 1.23
 `
 	err = os.WriteFile(goModPath, []byte(goModContent), 0644)
 	if err != nil {

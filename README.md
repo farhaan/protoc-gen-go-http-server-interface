@@ -4,7 +4,7 @@ A Protocol Buffer code generator plugin that produces HTTP server interfaces and
 
 ## System Requirements
 
-- **Go**: Go 1.22 or higher
+- **Go**: Go 1.23 or higher
 - **Protocol Buffers**: protoc 3.14.0 or higher
 - **Google API Proto Files**: Required for HTTP annotations
   - Install with: `go get -u google.golang.org/genproto/googleapis/api/annotations`
