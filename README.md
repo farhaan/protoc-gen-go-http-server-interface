@@ -245,7 +245,6 @@ type RouteGroup struct {
 	prefix          string
 	middlewares     []Middleware
 	routes          []routeDef
-	registered      bool
 }
 ```
 
