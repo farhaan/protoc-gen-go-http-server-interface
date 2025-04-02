@@ -1,0 +1,108 @@
+syntax = "proto3";
+
+package api;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+// User represents a user in the system
+message User {
+  string id = 1;
+  string username = 2;
+  string email = 3;
+  string full_name = 4;
+  UserStatus status = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+// UserStatus represents the status of a user
+enum UserStatus {
+  USER_STATUS_UNSPECIFIED = 0;
+  USER_STATUS_ACTIVE = 1;
+  USER_STATUS_INACTIVE = 2;
+  USER_STATUS_SUSPENDED = 3;
+}
+
+// GetUserRequest is used to fetch a user by ID
+message GetUserRequest {
+  string user_id = 1;
+}
+
+// ListUsersRequest is used to list users with pagination
+message ListUsersRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string search_query = 3;
+  UserStatus status_filter = 4;
+}
+
+// ListUsersResponse contains a list of users
+message ListUsersResponse {
+  repeated User users = 1;
+  int32 total_count = 2;
+}
+
+// CreateUserRequest is used to create a new user
+message CreateUserRequest {
+  string username = 1;
+  string email = 2;
+  string full_name = 3;
+  string password = 4; // Password is only used for creation, not returned
+}
+
+// UpdateUserRequest is used to update an existing user
+message UpdateUserRequest {
+  string user_id = 1;
+  string email = 2;
+  string full_name = 3;
+  UserStatus status = 4;
+}
+
+// UserService provides methods to manage users
+service UserService {
+  // GetUser retrieves a user by ID
+  rpc GetUser(GetUserRequest) returns (User) {
+    option (google.api.http) = {
+      get: "/users/{user_id}"
+    };
+  }
+  
+  // ListUsers lists users with filtering and pagination
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {
+    option (google.api.http) = {
+      get: "/users"
+    };
+  }
+  
+  // CreateUser creates a new user
+  rpc CreateUser(CreateUserRequest) returns (User) {
+    option (google.api.http) = {
+      post: "/users"
+      body: "*"
+    };
+  }
+  
+  // UpdateUser updates an existing user
+  rpc UpdateUser(UpdateUserRequest) returns (User) {
+    option (google.api.http) = {
+      put: "/users/{user_id}"
+      body: "*"
+    };
+  }
+  
+  // DeleteUser deletes a user
+  rpc DeleteUser(GetUserRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/users/{user_id}"
+    };
+  }
+  
+  // Health check endpoint
+  rpc Liveness(google.protobuf.Empty) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      get: "/liveness"
+    };
+  }
+}

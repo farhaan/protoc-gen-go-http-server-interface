@@ -4,7 +4,7 @@ A Protocol Buffer code generator plugin that produces HTTP server interfaces and
 
 ## System Requirements
 
-- **Go**: Go 1.24.1 or higher
+- **Go**: Go 1.22 or higher
 - **Protocol Buffers**: protoc 3.14.0 or higher
 - **Google API Proto Files**: Required for HTTP annotations
   - Install with: `go get -u google.golang.org/genproto/googleapis/api/annotations`
@@ -15,7 +15,7 @@ A Protocol Buffer code generator plugin that produces HTTP server interfaces and
 
 ## Overview
 
-This plugin generates Go HTTP handler interfaces, route registration functions, and middleware support from Protocol Buffer service definitions with Google HTTP annotations. It provides a clean, expressive API for registering HTTP routes with middleware.
+A protocol buffer compiler plugin that generates HTTP server interfaces from proto files. This plugin allows you to define your API using Protocol Buffers and automatically generate Go HTTP server code with middleware support, route grouping, and flexible path handling.
 
 ### Key Features
 
@@ -23,18 +23,15 @@ This plugin generates Go HTTP handler interfaces, route registration functions, 
 - **Middleware Support**: Global, group-level, and route-specific middleware
 - **Path Prefixing**: Easy API versioning with route groups
 - **Method Chaining**: Fluent API for intuitive route registration
-- **Duplicate Route Protection**: Prevents accidental registration of duplicate routes
-- **Minimal Abstractions**: Simple design with just one core type (RouteGroup)
 
 ## Design Philosophy
 
 The design follows a domain-driven approach with these principles:
 
-1. **Simplicity over complexity**: One core type (`RouteGroup`) handles both root routing and sub-groups
 2. **Type safety**: Generated interfaces ensure compile-time checks for handler implementations 
 3. **Familiar patterns**: API inspired by popular Go HTTP frameworks (Chi, Echo, Gin)
 4. **Middleware chain clarity**: Clear execution order (global → group → route-specific)
-5. **No external dependencies**: Uses only the Go standard library
+5. **(Almost) No external dependencies**: Uses only the Go standard library
 
 ## Installation
 
@@ -151,10 +148,10 @@ func main() {
 	
 	// Register individual routes with middleware
 	router.RegisterGetProduct(productHandler)
-	router.RegisterListProducts(productHandler, RateLimiter(30))
+	router.RegisterListProducts(productHandler, pb.Middleware(RateLimiter(30)))
 	
 	// Group routes with middleware
-	authRoutes := router.Group("/admin").Use(Authentication())
+	authRoutes := router.Group("/admin").Use(pb.Middleware(Authentication()))
 	authRoutes.RegisterCreateProduct(productHandler)
 	authRoutes.RegisterUpdateProduct(productHandler)
 	authRoutes.RegisterDeleteProduct(productHandler)
@@ -247,7 +244,8 @@ type RouteGroup struct {
 	mux             *http.ServeMux
 	prefix          string
 	middlewares     []Middleware
-	registeredPaths map[string]bool
+	routes          []routeDef
+	registered      bool
 }
 ```
 
@@ -331,25 +329,74 @@ v2.RegisterGetProduct(productHandlerV2)
 router := pb.NewRouter()
 
 // Chain method calls
-router.Use(Logger()).
+router.Use(pb.Middleware(Logger())).
        Group("/api").
-       Use(RateLimiter(60)).
+       Use(pb.Middleware(RateLimiter(60))).
        RegisterGetProduct(productHandler)
 ```
 
-### Multiple Middlewares
+### Shared ServeMux Support
+A key feature of this plugin is the ability to use multiple services with a single HTTP server. This allows you to:
+
+- Register routes from multiple proto-generated services onto a single HTTP server
+- Apply common middleware across all services
+- Organize routes with prefixes to avoid conflicts
+- Leverage Go 1.22's advanced routing features (method+path specificity)
 
 ```go
-router := pb.NewRouter()
+// Create a shared ServeMux
+sharedMux := http.NewServeMux()
 
-// Apply multiple middlewares to a route
-router.RegisterCreateProduct(
-	productHandler,
-	Authentication(),
-	RateLimiter(30),
-	Validation(),
-)
+// Create routers sharing the mux
+productRouter := productPb.NewRouter(sharedMux)
+userRouter := userPb.NewRouter(sharedMux)
+
+// Apply global middleware to each router
+productRouter.Use(productPb.Middlewarae(Logger()))
+userRouter.Use(userPb.Middlewarae(Logger()))
+
+// Create service and handler instances
+productService := productSvc.NewProductService()
+productHandler := productHandler.NewProductHandler(productService)
+
+userService := userSvc.NewUserService()
+userHandler := userHandler.NewUserHandler(userService)
+
+// Add path prefixes to avoid conflicts
+productsApi := productRouter.Group("/api/products")
+productsApi.RegisterProductServiceRoutes(productHandler)
+
+usersApi := userRouter.Group("/api/users")
+usersApi.RegisterUserServiceRoutes(userHandler)
+
+// Start the server
+http.ListenAndServe(":8080", sharedMux)
+
 ```
+
+### Avoiding Route Conflicts
+When using a shared ServeMux with multiple services, you may need to handle route conflicts. There are several approaches:
+
+#### Use distinct path prefixes:
+```go
+productsApi := productRouter.Group("/api/products")
+usersApi := userRouter.Group("/api/users")
+```
+
+#### Use API versioning:
+```go
+v1Products := productRouter.Group("/api/v1/products")
+v2Products := productRouter.Group("/api/v2/products")
+```
+
+#### Selectively register routes:
+```go
+// Register only specific methods instead of all routes
+router.RegisterGetUser(userHandler)
+router.RegisterListUsers(userHandler)
+```
+
+Go 1.22's ServeMux will detect conflicts at registration time, so you'll get an immediate panic if any route conflicts exist.
 
 ## Testing
 
@@ -365,7 +412,6 @@ The package includes comprehensive tests for:
 - Middleware application
 - Middleware ordering
 - Method chaining
-- Duplicate route protection
 
 
 ## protoc-gen-go-http-server-interface Options
