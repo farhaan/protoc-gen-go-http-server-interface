@@ -254,6 +254,9 @@ func TestGenerateCode(t *testing.T) {
 		"type TestServiceHandler interface",
 		"HandleGetItem",
 		"func RegisterGetItemRoute",
+		// Check for updated content related to the new ServeMux parameter
+		"func NewRouter(mux *http.ServeMux)",
+		"func DefaultRouter()",
 	}
 
 	for _, expected := range expectedContents {
@@ -424,6 +427,9 @@ func TestGenerate(t *testing.T) {
 		"package test",
 		"type TestServiceHandler interface",
 		"HandleMethodWithHTTP",
+		// Check for new shared mux-related content
+		"func NewRouter(mux *http.ServeMux)",
+		"func DefaultRouter()",
 	}
 
 	for _, expected := range expectedContents {
@@ -596,9 +602,13 @@ func TestTemplateExecution(t *testing.T) {
 		t.Error("Generated code doesn't contain RouteGroup.RegisterEcho method")
 	}
 
-	// Check for the updated pattern with registeredPaths map
-	if !strings.Contains(code, "registeredPaths map[string]bool") {
-		t.Error("Generated code doesn't contain registeredPaths map")
+	// Check for new shared mux constructor
+	if !strings.Contains(code, "func NewRouter(mux *http.ServeMux)") {
+		t.Error("Generated code doesn't contain NewRouter function with mux parameter")
+	}
+
+	if !strings.Contains(code, "func DefaultRouter()") {
+		t.Error("Generated code doesn't contain DefaultRouter function")
 	}
 
 	// Check for proper middleware chaining
