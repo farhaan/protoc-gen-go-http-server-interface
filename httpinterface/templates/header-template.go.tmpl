@@ -2,7 +2,6 @@
 package {{ .PackageName }}
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 )
@@ -24,21 +23,38 @@ type Routes interface {
 
 // RouteGroup represents a group of routes with a common prefix and middleware
 type RouteGroup struct {
-	mux             *http.ServeMux
 	prefix          string
 	middlewares     []Middleware
-	// Track registered paths to prevent duplicates
-	registeredPaths map[string]bool
+	routes          []routeDef
+	mux             *http.ServeMux
 }
 
-// NewRouter creates a new router (which is just a RouteGroup with root prefix)
-func NewRouter() *RouteGroup {
-	return &RouteGroup{
-		mux:             http.NewServeMux(),
-		prefix:          "",
-		middlewares:     []Middleware{},
-		registeredPaths: make(map[string]bool),
+// routeDef stores a route definition before it's registered with the mux
+type routeDef struct {
+	method      string
+	pattern     string
+	handler     http.Handler
+}
+
+// NewRouter creates a new router with an optional mux
+// If mux is nil, a new http.ServeMux will be created
+func NewRouter(mux *http.ServeMux) *RouteGroup {
+	if mux == nil {
+		mux = http.NewServeMux()
 	}
+	
+	return &RouteGroup{
+		prefix:       "",
+		middlewares:  []Middleware{},
+		routes:       []routeDef{},
+		mux:          mux,
+	}
+}
+
+// DefaultRouter creates a new router with a new ServeMux
+// This function exists for backward compatibility
+func DefaultRouter() *RouteGroup {
+	return NewRouter(nil)
 }
 
 // Group creates a new RouteGroup with the given prefix and optional middlewares
@@ -58,15 +74,14 @@ func (g *RouteGroup) Group(prefix string, middlewares ...Middleware) *RouteGroup
 	}
 	
 	return &RouteGroup{
-		mux:             g.mux,
-		prefix:          prefix,
-		middlewares:     append(append([]Middleware{}, g.middlewares...), middlewares...),
-		registeredPaths: g.registeredPaths,
+		prefix:       prefix,
+		middlewares:  append(append([]Middleware{}, g.middlewares...), middlewares...),
+		routes:       []routeDef{}, // Each group gets its own routes slice
+		mux:          g.mux,        // Share the same mux
 	}
 }
 
 // Use applies middlewares to all routes registered after this call
-// Returns the RouteGroup for method chaining
 func (g *RouteGroup) Use(middlewares ...Middleware) *RouteGroup {
 	g.middlewares = append(g.middlewares, middlewares...)
 	return g
@@ -84,15 +99,6 @@ func (g *RouteGroup) HandleFunc(method, pattern string, handler http.HandlerFunc
 		fullPattern = g.prefix + pattern
 	}
 	
-	// Check if the route is already registered
-	routeKey := method + " " + fullPattern
-	if g.registeredPaths[routeKey] {
-		// Either return an error or log a warning
-		// For now, we'll just print a warning
-		fmt.Printf("Warning: Route already registered: %s\n", routeKey)
-		return
-	}
-	
 	// Apply middleware chain to the handler
 	var finalHandler http.Handler = handler
 	
@@ -106,14 +112,29 @@ func (g *RouteGroup) HandleFunc(method, pattern string, handler http.HandlerFunc
 		finalHandler = g.middlewares[i](finalHandler)
 	}
 	
-	// Register the handler with the ServeMux
-	g.mux.HandleFunc(routeKey, finalHandler.ServeHTTP)
+	// Store and register the route definition
+	routeDefinition := routeDef{
+		method:   method,
+		pattern:  fullPattern,
+		handler:  finalHandler,
+	}
+	g.routes = append(g.routes, routeDefinition)
+
+	routeDefinitionKey := routeDefinition.method + " " + routeDefinition.pattern
+	g.mux.Handle(routeDefinitionKey, routeDefinition.handler)
 	
-	// Mark the route as registered
-	g.registeredPaths[routeKey] = true
 }
 
+func (g RouteGroup) GetRoutes() []string {
+	routes := make([]string, len(g.routes))
+	for _, route := range g.routes {
+		routes = append(routes, route.method+" "+route.pattern)
+	}
+	return routes
+}
+
+
 // ServeHTTP implements the http.Handler interface
-func (g *RouteGroup) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (g *RouteGroup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	g.mux.ServeHTTP(w, req)
 }

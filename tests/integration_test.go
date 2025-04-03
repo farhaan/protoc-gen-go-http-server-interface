@@ -24,7 +24,7 @@ func TestCompileGeneratedCode(t *testing.T) {
 	goModPath := filepath.Join(tempDir, "go.mod")
 	goModContent := `module example.com/test
 
-go 1.24.1
+go 1.23
 `
 	err = os.WriteFile(goModPath, []byte(goModContent), 0644)
 	if err != nil {
@@ -51,27 +51,50 @@ type Routes interface {
 
 // RouteGroup represents a group of routes with a common prefix and middleware
 type RouteGroup struct {
-	mux             *http.ServeMux
 	prefix          string
 	middlewares     []Middleware
-	registeredPaths map[string]bool
+	routes          []routeDef
+	mux             *http.ServeMux
 }
 
-// NewRouter creates a new router (which is just a RouteGroup with root prefix)
-func NewRouter() *RouteGroup {
+// routeDef stores a route definition before it's registered with the mux
+type routeDef struct {
+	method      string
+	pattern     string
+	handler     http.Handler
+}
+
+// NewRouter creates a new router with an optional mux
+// If mux is nil, a new http.ServeMux will be created
+func NewRouter(mux *http.ServeMux) *RouteGroup {
+	if mux == nil {
+		mux = http.NewServeMux()
+	}
+	
 	return &RouteGroup{
-		mux:             http.NewServeMux(),
-		prefix:          "/",
-		middlewares:     []Middleware{},
-		registeredPaths: make(map[string]bool),
+		prefix:       "",
+		middlewares:  []Middleware{},
+		routes:       []routeDef{},
+		mux:          mux,
 	}
 }
 
+// DefaultRouter creates a new router with a new ServeMux
+func DefaultRouter() *RouteGroup {
+	return NewRouter(nil)
+}
+
 func (g *RouteGroup) Group(prefix string, middlewares ...Middleware) *RouteGroup {
-	return &RouteGroup{}
+	return &RouteGroup{
+		prefix:      g.prefix + prefix,
+		middlewares: append(g.middlewares, middlewares...),
+		routes:      []routeDef{},
+		mux:         g.mux,
+	}
 }
 
 func (g *RouteGroup) Use(middlewares ...Middleware) *RouteGroup {
+	g.middlewares = append(g.middlewares, middlewares...)
 	return g
 }
 
@@ -80,7 +103,7 @@ func (g *RouteGroup) HandleFunc(method, pattern string, handler http.HandlerFunc
 }
 
 func (g *RouteGroup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// implementation not needed for compilation test
+	g.mux.ServeHTTP(w, r)
 }
 
 // TestServiceHandler is the interface for TestService HTTP handlers
@@ -126,24 +149,28 @@ func Logger() Middleware {
 }
 
 func main() {
-	// Create the router
-	router := NewRouter()
+	// Create a shared mux
+	sharedMux := http.NewServeMux()
+	
+	// Create the router with the shared mux
+	router1 := NewRouter(sharedMux)
+	router2 := NewRouter(sharedMux)
 	
 	// Apply middleware
-	router.Use(Logger())
+	router1.Use(Logger())
 	
 	// Create a handler
 	handler := &MyTestHandler{}
 	
-	// Register routes
-	router.RegisterGetTest(handler)
+	// Register routes on different routers
+	router1.RegisterGetTest(handler)
 	
 	// Group routes
-	apiGroup := router.Group("/api/v1")
+	apiGroup := router2.Group("/api/v1")
 	apiGroup.RegisterGetTest(handler)
 	
-	// Start the server
-	http.ListenAndServe(":8080", router)
+	// Start the server with the shared mux
+	http.ListenAndServe(":8080", sharedMux)
 }
 `
 
@@ -176,6 +203,187 @@ func main() {
 	fmt.Println("Successfully compiled test program!")
 }
 
+// TestSharedMuxCompilation verifies that the shared mux functionality compiles
+func TestSharedMuxCompilation(t *testing.T) {
+	// Create a temporary directory for the test
+	tempDir, err := os.MkdirTemp("", "shared-mux-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a go.mod file
+	goModPath := filepath.Join(tempDir, "go.mod")
+	goModContent := `module example.com/test
+
+go 1.23
+`
+	err = os.WriteFile(goModPath, []byte(goModContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write go.mod file: %v", err)
+	}
+
+	// Create a test file demonstrating shared mux usage
+	testCode := `package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+// Simplified versions of the generated types for testing
+type Middleware func(http.Handler) http.Handler
+
+type Routes interface {
+	HandleFunc(method, pattern string, handler http.HandlerFunc, middlewares ...Middleware)
+	Group(prefix string, middlewares ...Middleware) *RouteGroup
+	Use(middlewares ...Middleware) *RouteGroup
+}
+
+type RouteGroup struct {
+	prefix          string
+	middlewares     []Middleware
+	routes          []routeDef
+	mux             *http.ServeMux
+}
+
+type routeDef struct {
+	method      string
+	pattern     string
+	handler     http.Handler
+}
+
+func NewRouter(mux *http.ServeMux) *RouteGroup {
+	if mux == nil {
+		mux = http.NewServeMux()
+	}
+	
+	return &RouteGroup{
+		prefix:       "",
+		middlewares:  []Middleware{},
+		routes:       []routeDef{},
+		mux:          mux,
+	}
+}
+
+func DefaultRouter() *RouteGroup {
+	return NewRouter(nil)
+}
+
+func (g *RouteGroup) Group(prefix string, middlewares ...Middleware) *RouteGroup {
+	return &RouteGroup{
+		prefix:      g.prefix + prefix,
+		middlewares: append(g.middlewares, middlewares...),
+		routes:      []routeDef{},
+		mux:         g.mux,
+	}
+}
+
+func (g *RouteGroup) Use(middlewares ...Middleware) *RouteGroup {
+	g.middlewares = append(g.middlewares, middlewares...)
+	return g
+}
+
+func (g *RouteGroup) HandleFunc(method, pattern string, handler http.HandlerFunc, middlewares ...Middleware) {	
+	// Store the route definition
+	g.routes = append(g.routes, routeDef{
+		method:  method,
+		pattern: g.prefix + pattern,
+		handler: handler,
+	})
+	
+}
+
+func (g *RouteGroup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	g.mux.ServeHTTP(w, r)
+}
+
+// Sample handlers for testing
+type ProductHandler struct{}
+type UserHandler struct{}
+
+func (h *ProductHandler) HandleGetProduct(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Product details")
+}
+
+func (h *UserHandler) HandleGetUser(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "User details")
+}
+
+// Mock interfaces for testing
+type ProductServiceHandler interface {
+	HandleGetProduct(w http.ResponseWriter, r *http.Request)
+}
+
+type UserServiceHandler interface {
+	HandleGetUser(w http.ResponseWriter, r *http.Request)
+}
+
+// Sample registration functions
+func (g *RouteGroup) RegisterGetProduct(handler ProductServiceHandler, middlewares ...Middleware) {
+	g.HandleFunc("GET", "/products/{id}", handler.HandleGetProduct, middlewares...)
+}
+
+func (g *RouteGroup) RegisterGetUser(handler UserServiceHandler, middlewares ...Middleware) {
+	g.HandleFunc("GET", "/users/{id}", handler.HandleGetUser, middlewares...)
+}
+
+func main() {
+	// Create a shared ServeMux
+	sharedMux := http.NewServeMux()
+	
+	// Create routers that share the mux
+	productRouter := NewRouter(sharedMux)
+	userRouter := NewRouter(sharedMux)
+	
+	// Create handlers
+	productHandler := &ProductHandler{}
+	userHandler := &UserHandler{}
+	
+	// Register routes on different routers
+	productRouter.RegisterGetProduct(productHandler)
+	userRouter.RegisterGetUser(userHandler)
+	
+	// Group routes with prefixes
+	v1Products := productRouter.Group("/api/v1")
+	v1Products.RegisterGetProduct(productHandler)
+	
+	v1Users := userRouter.Group("/api/v1")
+	v1Users.RegisterGetUser(userHandler)
+
+	
+	// Start the server with the shared mux
+	fmt.Println("Starting server on :8080")
+	http.ListenAndServe(":8080", sharedMux)
+}
+`
+
+	testFilePath := filepath.Join(tempDir, "main.go")
+	err = os.WriteFile(testFilePath, []byte(testCode), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test Go file: %v", err)
+	}
+
+	// Run go build to check if it compiles
+	cmd := exec.Command("go", "build", "-o", filepath.Join(tempDir, "test"), ".")
+	cmd.Dir = tempDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err = cmd.Run()
+	if err != nil {
+		t.Fatalf("Compilation failed: %v", err)
+	}
+
+	// Check if the binary was created
+	binPath := filepath.Join(tempDir, "test")
+	if _, err := os.Stat(binPath); os.IsNotExist(err) {
+		t.Fatalf("Compiled binary not found: %s", binPath)
+	}
+
+	fmt.Println("Successfully compiled shared mux test program!")
+}
+
 // Helper function for manual testing that creates a sample implementation file
 func CreateSampleImplementation() string {
 	// Create a temporary directory
@@ -190,6 +398,7 @@ func CreateSampleImplementation() string {
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -205,20 +414,36 @@ type Routes interface {
 
 // RouteGroup represents a group of routes with a common prefix and middleware
 type RouteGroup struct {
-	mux             *http.ServeMux
 	prefix          string
 	middlewares     []Middleware
-	registeredPaths map[string]bool
+	routes          []routeDef
+	mux             *http.ServeMux
 }
 
-// NewRouter creates a new router (which is just a RouteGroup with root prefix)
-func NewRouter() *RouteGroup {
-	return &RouteGroup{
-		mux:             http.NewServeMux(),
-		prefix:          "/",
-		middlewares:     []Middleware{},
-		registeredPaths: make(map[string]bool),
+// routeDef stores a route definition before it's registered with the mux
+type routeDef struct {
+	method      string
+	pattern     string
+	handler     http.Handler
+}
+
+// NewRouter creates a new router with an optional mux
+func NewRouter(mux *http.ServeMux) *RouteGroup {
+	if mux == nil {
+		mux = http.NewServeMux()
 	}
+	
+	return &RouteGroup{
+		prefix:       "",
+		middlewares:  []Middleware{},
+		routes:       []routeDef{},
+		mux:          mux,
+	}
+}
+
+// DefaultRouter creates a new router with a new ServeMux
+func DefaultRouter() *RouteGroup {
+	return NewRouter(nil)
 }
 
 // Group creates a new RouteGroup with the given prefix and optional middlewares
@@ -238,15 +463,14 @@ func (g *RouteGroup) Group(prefix string, middlewares ...Middleware) *RouteGroup
 	}
 	
 	return &RouteGroup{
-		mux:             g.mux,
-		prefix:          prefix,
-		middlewares:     append(append([]Middleware{}, g.middlewares...), middlewares...),
-		registeredPaths: g.registeredPaths,
+		prefix:       prefix,
+		middlewares:  append(append([]Middleware{}, g.middlewares...), middlewares...),
+		routes:       []routeDef{}, // Each group gets its own routes
+		mux:          g.mux,        // Share the same mux
 	}
 }
 
 // Use applies middlewares to all routes registered after this call
-// Returns the RouteGroup for method chaining
 func (g *RouteGroup) Use(middlewares ...Middleware) *RouteGroup {
 	g.middlewares = append(g.middlewares, middlewares...)
 	return g
@@ -264,15 +488,6 @@ func (g *RouteGroup) HandleFunc(method, pattern string, handler http.HandlerFunc
 		fullPattern = g.prefix + pattern
 	}
 	
-	// Check if the route is already registered
-	routeKey := method + " " + fullPattern
-	if g.registeredPaths[routeKey] {
-		// Either return an error or log a warning
-		// For now, we'll just print a warning
-		fmt.Printf("Warning: Route already registered: %s\n", routeKey)
-		return
-	}
-	
 	// Apply middleware chain to the handler
 	var finalHandler http.Handler = handler
 	
@@ -286,16 +501,22 @@ func (g *RouteGroup) HandleFunc(method, pattern string, handler http.HandlerFunc
 		finalHandler = g.middlewares[i](finalHandler)
 	}
 	
-	// Register the handler with the ServeMux
-	g.mux.HandleFunc(routeKey, finalHandler.ServeHTTP)
-	
-	// Mark the route as registered
-	g.registeredPaths[routeKey] = true
+	// Store and register the route definition
+	routeDefinition := routeDef{
+		method:   method,
+		pattern:  fullPattern,
+		handler:  finalHandler,
+	}
+	g.routes = append(g.routes, routeDefinition)
+
+	routeDefinitionKey := routeDefinition.method + " " + routeDefinition.pattern
+	g.mux.Handle(routeDefinitionKey, routeDefinition.handler)
+
 }
 
 // ServeHTTP implements the http.Handler interface
-func (g *RouteGroup) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	g.mux.ServeHTTP(w, req)
+func (g *RouteGroup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	g.mux.ServeHTTP(w, r)
 }
 
 // Logger middleware logs request details
@@ -324,23 +545,23 @@ func Auth() Middleware {
 }
 
 func main() {
-	router := NewRouter()
+	// Create a shared ServeMux
+	sharedMux := http.NewServeMux()
 	
-	// Apply global middleware
-	router.Use(Logger())
+	// Create two routers sharing the same mux
+	router1 := NewRouter(sharedMux)
+	router2 := NewRouter(sharedMux)
 	
-	// Add a simple route
-	router.HandleFunc("GET", "/hello", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Hello, World!")
+	// Apply global middleware to router1
+	router1.Use(Logger())
+	
+	// Add routes to router1
+	router1.HandleFunc("GET", "/hello", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "Hello from Router 1!")
 	})
 	
-	// Add routes with middleware
-	router.HandleFunc("GET", "/secure", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Secure endpoint")
-	}, Auth())
-	
-	// Create a group with path prefix
-	apiGroup := router.Group("/api")
+	// Add routes to router2 with a path prefix
+	apiGroup := router2.Group("/api")
 	apiGroup.HandleFunc("GET", "/items", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "[{\"id\":1,\"name\":\"Item 1\"},{\"id\":2,\"name\":\"Item 2\"}]")
 	})
@@ -351,8 +572,9 @@ func main() {
 		fmt.Fprintf(w, "{\"id\":3,\"name\":\"New Item\",\"status\":\"created\"}")
 	})
 	
+	
 	fmt.Println("Server starting on http://localhost:8080")
-	err := http.ListenAndServe(":8080", router)
+	err := http.ListenAndServe(":8080", sharedMux)
 	if err != nil {
 		fmt.Printf("Server error: %v\n", err)
 	}

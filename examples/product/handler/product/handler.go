@@ -1,4 +1,4 @@
-package service
+package producthandler
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	pb "github.com/farhaan/protoc-gen-go-http-server-interface/examples/product/pb" // Your generated proto package
+	pb "github.com/farhaan/protoc-gen-go-http-server-interface/examples/product/pb/product" // Your generated proto package
 	service "github.com/farhaan/protoc-gen-go-http-server-interface/examples/product/service/product"
 )
 
@@ -200,7 +200,7 @@ func readProductFromBody(r *http.Request) (*pb.Product, error) {
 }
 
 // writeJSONResponse writes a JSON response
-func writeJSONResponse(w http.ResponseWriter, msg interface{}) {
+func writeJSONResponse(w http.ResponseWriter, msg any) {
 	var data []byte
 	var err error
 
