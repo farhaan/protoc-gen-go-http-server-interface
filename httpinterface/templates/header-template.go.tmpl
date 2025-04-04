@@ -136,5 +136,5 @@ func (g RouteGroup) GetRoutes() []string {
 
 // ServeHTTP implements the http.Handler interface
 func (g *RouteGroup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	g.mux.ServeHTTP(w, req)
+	g.mux.ServeHTTP(w, r)
 }
