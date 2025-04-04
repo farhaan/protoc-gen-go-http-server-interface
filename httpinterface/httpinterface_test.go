@@ -312,31 +312,196 @@ func TestGetPackageName(t *testing.T) {
 	g := New()
 
 	tests := []struct {
-		file     *descriptor.FileDescriptorProto
-		expected string
+		name        string
+		protoFile   *descriptor.FileDescriptorProto
+		wantPackage string
 	}{
+		// Basic cases
 		{
-			&descriptor.FileDescriptorProto{
+			name: "simple proto package",
+			protoFile: &descriptor.FileDescriptorProto{
 				Package: proto.String("test"),
 			},
-			"test",
+			wantPackage: "test",
 		},
 		{
-			&descriptor.FileDescriptorProto{
-				Package: proto.String("foo"),
+			name: "empty proto package",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String(""),
+			},
+			wantPackage: "",
+		},
+
+		// Proto package versioning patterns
+		{
+			name: "standard versioned package",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("oauth.v1"),
+			},
+			wantPackage: "oauthv1",
+		},
+		{
+			name: "version with beta suffix",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("oauth.v1beta1"),
+			},
+			wantPackage: "oauthv1beta1",
+		},
+		{
+			name: "version with alpha suffix",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("oauth.v1alpha1"),
+			},
+			wantPackage: "oauthv1alpha1",
+		},
+
+		// Complex package hierarchies
+		{
+			name: "deep package hierarchy",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("company.department.service.feature.v1"),
+			},
+			wantPackage: "featurev1",
+		},
+		{
+			name: "typical microservice package",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("api.core.oauth.v1"),
+			},
+			wantPackage: "oauthv1",
+		},
+		{
+			name: "internal service package",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("internal.auth.oauth.v1"),
+			},
+			wantPackage: "oauthv1",
+		},
+
+		// go_package option variations
+		{
+			name: "go_package with explicit name",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("api.core.oauth.v1"),
 				Options: &descriptor.FileOptions{
-					GoPackage: proto.String("example.com/foo"),
+					GoPackage: proto.String("example.com/api/oauth/v1;oauthv1"),
 				},
 			},
-			"foo",
+			wantPackage: "oauthv1",
+		},
+		{
+			name: "go_package with multiple path segments",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("api.core.oauth.v1"),
+				Options: &descriptor.FileOptions{
+					GoPackage: proto.String("example.com/internal/api/core/oauth/v1"),
+				},
+			},
+			wantPackage: "v1",
+		},
+		{
+			name: "go_package with organization prefix",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("api.core.oauth.v1"),
+				Options: &descriptor.FileOptions{
+					GoPackage: proto.String("github.com/organization/project/api/oauth;oauthapi"),
+				},
+			},
+			wantPackage: "oauthapi",
+		},
+
+		// Special cases and edge cases
+		{
+			name: "dots in service name",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("auth.oauth2.v1"),
+			},
+			wantPackage: "oauth2v1",
+		},
+		{
+			name: "numbers in package segments",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("api2.service3.v1"),
+			},
+			wantPackage: "service3v1",
+		},
+		{
+			name: "very short segments",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("a.b.c.v1"),
+			},
+			wantPackage: "cv1",
+		},
+		{
+			name: "repeated segments",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("oauth.oauth.v1"),
+			},
+			wantPackage: "oauthv1",
+		},
+
+		// Go module style package paths
+		{
+			name: "module path with version",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("api.oauth.v1"),
+				Options: &descriptor.FileOptions{
+					GoPackage: proto.String("example.com/api/v1;apiv1"),
+				},
+			},
+			wantPackage: "apiv1",
+		},
+		{
+			name: "module subpath package",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("api.oauth.v1"),
+				Options: &descriptor.FileOptions{
+					GoPackage: proto.String("example.com/api/oauth/internal/v1;oauthv1"),
+				},
+			},
+			wantPackage: "oauthv1",
+		},
+
+		// Enterprise patterns
+		{
+			name: "enterprise service with region",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("enterprise.eu.oauth.v1"),
+			},
+			wantPackage: "oauthv1",
+		},
+		{
+			name: "enterprise service with product",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("enterprise.product.oauth.v1"),
+			},
+			wantPackage: "oauthv1",
+		},
+
+		// Validation cases
+		{
+			name: "unusual version format",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("service.version1"),
+			},
+			wantPackage: "serviceversion1",
+		},
+		{
+			name: "single letter segments",
+			protoFile: &descriptor.FileDescriptorProto{
+				Package: proto.String("a.b.c.d"),
+			},
+			wantPackage: "cd",
 		},
 	}
 
-	for i, test := range tests {
-		result := g.getPackageName(test.file)
-		if result != test.expected {
-			t.Errorf("Test %d: getPackageName() = %q, want %q", i, result, test.expected)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotPackage := g.getPackageName(tt.protoFile)
+			if gotPackage != tt.wantPackage {
+				t.Errorf("getPackageName() = %q, want %q", gotPackage, tt.wantPackage)
+			}
+		})
 	}
 }
 

@@ -239,17 +239,38 @@ func (g *Generator) outputFilename(protoFilename string) string {
 func (g *Generator) getPackageName(file *descriptor.FileDescriptorProto) string {
 	// Use go_package option if available
 	if goPackage := file.GetOptions().GetGoPackage(); goPackage != "" {
-		if idx := strings.LastIndex(goPackage, "/"); idx >= 0 {
+		// Check for explicit package name after semicolon
+		if idx := strings.LastIndex(goPackage, ";"); idx >= 0 {
 			return goPackage[idx+1:]
 		}
-		if idx := strings.LastIndex(goPackage, ";"); idx >= 0 {
+		// Otherwise use the last path segment
+		if idx := strings.LastIndex(goPackage, "/"); idx >= 0 {
 			return goPackage[idx+1:]
 		}
 		return goPackage
 	}
 
-	// Fall back to proto package
-	return file.GetPackage()
+	// Fall back to proto package name
+	protoPackage := file.GetPackage()
+	if protoPackage == "" {
+		return ""
+	}
+
+	// Split by dots and process
+	parts := strings.Split(protoPackage, ".")
+	switch len(parts) {
+	case 0:
+		return ""
+	case 1:
+		return parts[0]
+	case 2:
+		return strings.Join(parts, "")
+	default:
+		// For packages with more than 2 segments, use the last two
+		// Example: api.core.oauth.v1 -> oauthv1
+		lastTwo := parts[len(parts)-2:]
+		return strings.Join(lastTwo, "")
+	}
 }
 
 // getTypeName returns the simple type name from a fully qualified type name.
