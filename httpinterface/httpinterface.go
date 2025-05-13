@@ -35,6 +35,8 @@ type Generator struct {
 	PathParamExtractor PathParamExtractor
 	// PathPatternConverter converts path patterns
 	PathPatternConverter PathPatternConverter
+	// SupportsEditions indicates if this generator supports editions
+	SupportsEditions bool
 }
 
 // ServiceData contains the data for a service definition.
@@ -55,14 +57,6 @@ type MethodInfo struct {
 	InputType  string
 	OutputType string
 	HTTPRules  []HTTPRule
-}
-
-// HTTPRule represents an HTTP binding from annotations.
-type HTTPRule struct {
-	Method     string
-	Pattern    string
-	Body       string
-	PathParams []string
 }
 
 // New creates a new httpinterface generator with an optional custom HTTP rule extractor.
@@ -97,6 +91,7 @@ func New(httpExtractor ...HTTPRuleExtractor) *Generator {
 		HTTPRuleExtractor:     extractor,
 		PathParamExtractor:    parsePathParams,
 		PathPatternConverter:  convertPathPattern,
+		SupportsEditions:      true,
 	}
 }
 
@@ -125,6 +120,7 @@ func NewWith(httpExtractor HTTPRuleExtractor, pathExtractor PathParamExtractor, 
 		HTTPRuleExtractor:     httpExtractor,
 		PathParamExtractor:    pathExtractor,
 		PathPatternConverter:  converter,
+		SupportsEditions:      true,
 	}
 }
 
@@ -132,9 +128,20 @@ func NewWith(httpExtractor HTTPRuleExtractor, pathExtractor PathParamExtractor, 
 func (g *Generator) Generate(req *plugin.CodeGeneratorRequest) *plugin.CodeGeneratorResponse {
 	resp := new(plugin.CodeGeneratorResponse)
 
-	// Declare support for protobuf 3 features
+	// Declare support for protobuf features
 	supportedFeatures := uint64(plugin.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
+	
+	// Add editions support if the generator supports it
+	if g.SupportsEditions {
+		supportedFeatures |= uint64(plugin.CodeGeneratorResponse_FEATURE_SUPPORTS_EDITIONS)
+	}
+	
 	resp.SupportedFeatures = proto.Uint64(supportedFeatures)
+	
+	// Set maximum edition support for editions
+	if g.SupportsEditions {
+		resp.MaximumEdition = proto.Int32(int32(descriptor.Edition_EDITION_2023))
+	}
 
 	// Parse options from parameter
 	if err := g.parseAndSetOptions(req.GetParameter()); err != nil {
