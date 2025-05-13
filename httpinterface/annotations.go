@@ -1,108 +1,99 @@
 package httpinterface
 
 import (
-	"regexp"
-
+	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface/parser"
 	"github.com/golang/protobuf/protoc-gen-go/descriptor"
-	options "google.golang.org/genproto/googleapis/api/annotations"
-	"google.golang.org/protobuf/proto"
 )
+
+// HTTPRule represents an HTTP binding from annotations.
+type HTTPRule struct {
+	Method     string
+	Pattern    string
+	Body       string
+	PathParams []string
+}
 
 // HTTPRuleExtractor is the function type for extracting HTTP rules
 type HTTPRuleExtractor func(method *descriptor.MethodDescriptorProto) []HTTPRule
 
-// parseMethodHTTPRules extracts HTTP rules from a method descriptor
-func parseMethodHTTPRules(method *descriptor.MethodDescriptorProto) []HTTPRule {
-	rules := []HTTPRule{}
+// PathParamExtractor is the function type for extracting path parameters
+type PathParamExtractor func(pattern string) []string
 
-	if method.Options != nil {
-		v := proto.GetExtension(method.Options, options.E_Http)
-		httpRule := v.(*options.HttpRule)
-		if httpRule != nil {
-			// Add the main rule
-			rule := parseHTTPRule(httpRule)
-			if rule.Method != "" {
-				rules = append(rules, rule)
-			}
+// PathPatternConverter is the function type for converting path patterns
+type PathPatternConverter func(pattern string) string
 
-			// Add additional bindings
-			for _, binding := range httpRule.AdditionalBindings {
-				rule := parseHTTPRule(binding)
-				if rule.Method != "" {
-					rules = append(rules, rule)
-				}
-			}
+// GetHTTPRules is the exported variable for HTTP rule extraction
+var GetHTTPRules HTTPRuleExtractor = getHTTPRules
 
+// GetPathParams is the exported variable for path parameter extraction
+var GetPathParams PathParamExtractor = getPathParams
+
+// ConvertPathPattern is the exported variable for path pattern conversion
+var ConvertPathPattern PathPatternConverter = convertPathPattern
+
+// Current file descriptor being processed
+var currentFileDescriptor *descriptor.FileDescriptorProto
+
+// SetFileDescriptor sets the current file descriptor for processing
+func SetFileDescriptor(file *descriptor.FileDescriptorProto) {
+	currentFileDescriptor = file
+}
+
+func ResetParserState() {
+	currentFileDescriptor = nil
+}
+
+// Implementation for getHTTPRules that uses the parser system
+func getHTTPRules(method *descriptor.MethodDescriptorProto) []HTTPRule {
+	// If we don't have a current file descriptor, return empty rules
+	if currentFileDescriptor == nil {
+		return []HTTPRule{}
+	}
+
+	// Create a parser for the current file
+	p := parser.CreateParser(currentFileDescriptor)
+
+	// Get rules from the parser
+	parsingRules := p.ParseHTTPRules(method)
+
+	// Convert to our HTTPRule type
+	rules := make([]HTTPRule, len(parsingRules))
+	for i, rule := range parsingRules {
+		rules[i] = HTTPRule{
+			Method:     rule.Method,
+			Pattern:    rule.Pattern,
+			Body:       rule.Body,
+			PathParams: rule.PathParams,
 		}
 	}
 
 	return rules
 }
 
-// GetHTTPRules is the exported variable for HTTP rule extraction
-// This allows the function to be replaced in tests
-var GetHTTPRules HTTPRuleExtractor = parseMethodHTTPRules
-
-// parseHTTPRule extracts method, pattern, and body from an HttpRule
-func parseHTTPRule(httpRule *options.HttpRule) HTTPRule {
-	rule := HTTPRule{
-		Body: httpRule.Body,
+// Implementation for getPathParams that uses the parser system
+func getPathParams(pattern string) []string {
+	// If we don't have a current file descriptor, return empty params
+	if currentFileDescriptor == nil {
+		return []string{}
 	}
 
-	switch pattern := httpRule.Pattern.(type) {
-	case *options.HttpRule_Get:
-		rule.Method = "GET"
-		rule.Pattern = pattern.Get
-	case *options.HttpRule_Post:
-		rule.Method = "POST"
-		rule.Pattern = pattern.Post
-	case *options.HttpRule_Put:
-		rule.Method = "PUT"
-		rule.Pattern = pattern.Put
-	case *options.HttpRule_Delete:
-		rule.Method = "DELETE"
-		rule.Pattern = pattern.Delete
-	case *options.HttpRule_Patch:
-		rule.Method = "PATCH"
-		rule.Pattern = pattern.Patch
-	case *options.HttpRule_Custom:
-		rule.Method = pattern.Custom.Kind
-		rule.Pattern = pattern.Custom.Path
-	}
+	// Create a parser for the current file
+	p := parser.CreateParser(currentFileDescriptor)
 
-	return rule
+	// Get path params from the parser
+	return p.ParsePathParams(pattern)
 }
 
-// PathParamExtractor is the function type for extracting path parameters
-type PathParamExtractor func(pattern string) []string
-
-// parsePathParams extracts path parameters from a URL pattern
-func parsePathParams(pattern string) []string {
-	params := []string{}
-	re := regexp.MustCompile(`\{([^/{}]+)\}`)
-	matches := re.FindAllStringSubmatch(pattern, -1)
-
-	for _, match := range matches {
-		if len(match) >= 2 {
-			params = append(params, match[1])
-		}
-	}
-
-	return params
-}
-
-// GetPathParams is the exported variable for path parameter extraction
-// This allows the function to be replaced in tests
-var GetPathParams PathParamExtractor = parsePathParams
-
-// PathPatternConverter is the function type for converting path patterns
-type PathPatternConverter func(pattern string) string
-
-// convertPathPattern converts a path pattern to Go format
+// Implementation for convertPathPattern that uses the parser system
 func convertPathPattern(pattern string) string {
-	return pattern
-}
+	// If we don't have a current file descriptor, return pattern unchanged
+	if currentFileDescriptor == nil {
+		return pattern
+	}
 
-// ConvertPathPattern is the exported variable for path pattern conversion
-// This allows the function to be replaced in tests
-var ConvertPathPattern PathPatternConverter = convertPathPattern
+	// Create a parser for the current file
+	p := parser.CreateParser(currentFileDescriptor)
+
+	// Convert pattern using the parser
+	return p.ConvertPathPattern(pattern)
+}
