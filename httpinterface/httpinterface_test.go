@@ -57,9 +57,10 @@ func mockGetHTTPRules(method *descriptor.MethodDescriptorProto) []HTTPRule {
 	if strings.Contains(method.GetName(), "HTTP") {
 		return []HTTPRule{
 			{
-				Method:  "GET",
-				Pattern: "/api/{id}",
-				Body:    "",
+				Method:     "GET",
+				Pattern:    "/api/{id}",
+				Body:       "",
+				PathParams: []string{"id"},
 			},
 		}
 	}
@@ -130,6 +131,9 @@ func TestBuildServiceData(t *testing.T) {
 	originalGetHTTPRules := GetHTTPRules
 	originalGetPathParams := GetPathParams
 	originalConvertPathPattern := ConvertPathPattern
+
+	// Reset the parser state to ensure it doesn't affect our mocks
+	ResetParserState()
 
 	GetHTTPRules = mockGetHTTPRules
 	GetPathParams = mockGetPathParams
@@ -1071,5 +1075,110 @@ func TestGenerateWithInvalidOptions(t *testing.T) {
 	// The response should not contain any files when there's an error
 	if len(resp.File) != 0 {
 		t.Errorf("len(resp.File) = %d, want 0", len(resp.File))
+	}
+}
+
+func TestEditionsSupport(t *testing.T) {
+	// Save the original functions and restore them after the test
+	originalGetHTTPRules := GetHTTPRules
+	originalGetPathParams := GetPathParams
+	originalConvertPathPattern := ConvertPathPattern
+
+	defer func() {
+		GetHTTPRules = originalGetHTTPRules
+		GetPathParams = originalGetPathParams
+		ConvertPathPattern = originalConvertPathPattern
+	}()
+
+	// Mock out the functions for testing
+	GetHTTPRules = func(method *descriptor.MethodDescriptorProto) []HTTPRule {
+		return []HTTPRule{
+			{
+				Method:     "GET",
+				Pattern:    "/api/{id}",
+				Body:       "",
+				PathParams: []string{"id"},
+			},
+		}
+	}
+
+	GetPathParams = func(pattern string) []string {
+		if pattern == "/api/{id}" {
+			return []string{"id"}
+		}
+		return nil
+	}
+
+	ConvertPathPattern = func(pattern string) string {
+		return pattern
+	}
+
+	g := New()
+	g.SupportsEditions = true
+
+	// Create a mock file descriptor with edition = "2023"
+	file := &descriptor.FileDescriptorProto{
+		Name: proto.String("test.proto"),
+		Options: &descriptor.FileOptions{
+			UninterpretedOption: []*descriptor.UninterpretedOption{
+				{
+					Name: []*descriptor.UninterpretedOption_NamePart{
+						{
+							NamePart:    proto.String("edition"),
+							IsExtension: proto.Bool(false),
+						},
+					},
+					StringValue: []byte("2023"),
+				},
+			},
+		},
+		Service: []*descriptor.ServiceDescriptorProto{
+			{
+				Name: proto.String("TestService"),
+				Method: []*descriptor.MethodDescriptorProto{
+					{
+						Name:       proto.String("TestMethod"),
+						InputType:  proto.String(".test.Request"),
+						OutputType: proto.String(".test.Response"),
+					},
+				},
+			},
+		},
+	}
+
+	// Test should pass because we mocked the HTTP rules extraction
+	if !g.hasHTTPRules(file) {
+		t.Error("hasHTTPRules() should return true for file with HTTP rules")
+	}
+
+	// Create a mock request with the edition file
+	req := &plugin.CodeGeneratorRequest{
+		FileToGenerate: []string{"test.proto"},
+		ProtoFile:      []*descriptor.FileDescriptorProto{file},
+	}
+
+	// Generate code
+	resp := g.Generate(req)
+
+	// Check that we advertise editions support
+	t.Log("Supported features:", resp.GetSupportedFeatures())
+	if resp.GetSupportedFeatures()&uint64(plugin.CodeGeneratorResponse_FEATURE_SUPPORTS_EDITIONS) == 0 {
+		t.Error("Generator should advertise editions support")
+	}
+
+	// Check that we generated a file
+	if len(resp.File) != 1 {
+		t.Fatalf("Expected 1 generated file, got %d", len(resp.File))
+	}
+
+	outputFile := resp.File[0]
+	if outputFile.GetName() != "test_http.pb.go" {
+		t.Errorf("Expected output file name to be 'test_http.pb.go', got '%s'", outputFile.GetName())
+	}
+
+	// Optional: Check content of the generated file
+	content := outputFile.GetContent()
+	if !strings.Contains(content, "TestService") {
+		t.Error("Generated code should contain TestService")
 	}
 }

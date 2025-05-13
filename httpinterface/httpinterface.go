@@ -1,4 +1,3 @@
-// Package httpinterface implements HTTP interface generation for protocol buffers.
 package httpinterface
 
 import (
@@ -28,6 +27,8 @@ type Generator struct {
 	ParsedTemplates *template.Template
 	// Options contains the plugin options
 	Options *Options
+	// SupportsEditions indicates if this generator supports editions
+	SupportsEditions bool
 }
 
 // ServiceData contains the data for a service definition.
@@ -50,14 +51,6 @@ type MethodInfo struct {
 	HTTPRules  []HTTPRule
 }
 
-// HTTPRule represents an HTTP binding from annotations.
-type HTTPRule struct {
-	Method     string
-	Pattern    string
-	Body       string
-	PathParams []string
-}
-
 // New creates a new httpinterface generator.
 func New() *Generator {
 	// Parse the templates
@@ -72,14 +65,17 @@ func New() *Generator {
 	tmpl = template.Must(tmpl.New("service").Parse(serviceTemplate))
 
 	return &Generator{
-		ParsedTemplates: tmpl,
-		Options:         &Options{},
+		ParsedTemplates:  tmpl,
+		Options:          &Options{},
+		SupportsEditions: true,
 	}
 }
 
 // Generate generates the HTTP interface code.
 func (g *Generator) Generate(req *plugin.CodeGeneratorRequest) *plugin.CodeGeneratorResponse {
 	resp := new(plugin.CodeGeneratorResponse)
+
+	// resp.MinimumEdition = proto.String("proto2")
 
 	// Parse options from parameter
 	options, err := ParseOptions(req.GetParameter())
@@ -88,12 +84,29 @@ func (g *Generator) Generate(req *plugin.CodeGeneratorRequest) *plugin.CodeGener
 		return resp
 	}
 	g.Options = options
+	if options.SupportsEditions {
+		g.SupportsEditions = true
+	}
+
+	// Advertise editions support in the response
+	supportedFeatures := uint64(plugin.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
+	if g.SupportsEditions {
+		supportedFeatures |= uint64(plugin.CodeGeneratorResponse_FEATURE_SUPPORTS_EDITIONS)
+		minimumEdition := int32(plugin.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
+		maximumEdition := int32(plugin.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
+		resp.MinimumEdition = &minimumEdition
+		resp.MaximumEdition = &maximumEdition
+	}
+	resp.SupportedFeatures = proto.Uint64(supportedFeatures)
 
 	// Process each proto file
 	for _, file := range req.ProtoFile {
 		if !g.shouldGenerate(file.GetName(), req.FileToGenerate) {
 			continue
 		}
+
+		// Set the current file descriptor for processing
+		SetFileDescriptor(file)
 
 		// Check if the file has any services with HTTP annotations
 		if !g.hasHTTPRules(file) {
@@ -185,10 +198,22 @@ func (g *Generator) buildServiceData(file *descriptor.FileDescriptorProto) *Serv
 			}
 
 			// Process HTTP rules
-			for i := range methodInfo.HTTPRules {
-				rule := &methodInfo.HTTPRules[i]
-				rule.PathParams = GetPathParams(rule.Pattern)
-				rule.Pattern = ConvertPathPattern(rule.Pattern)
+			for i, rule := range httpRules {
+				// Create a copy of the rule
+				methodInfo.HTTPRules[i] = HTTPRule{
+					Method:     rule.Method,
+					Pattern:    rule.Pattern,
+					Body:       rule.Body,
+					PathParams: rule.PathParams,
+				}
+
+				// Apply pattern conversion
+				methodInfo.HTTPRules[i].Pattern = ConvertPathPattern(methodInfo.HTTPRules[i].Pattern)
+
+				// CRITICAL FIX: If PathParams is empty, populate it explicitly, even when using mocks
+				if len(methodInfo.HTTPRules[i].PathParams) == 0 {
+					methodInfo.HTTPRules[i].PathParams = GetPathParams(methodInfo.HTTPRules[i].Pattern)
+				}
 			}
 
 			serviceInfo.Methods = append(serviceInfo.Methods, methodInfo)

@@ -25,7 +25,7 @@ func main() {
 	flag.Parse()
 
 	if showVersion {
-		fmt.Fprintf(os.Stderr, "protoc-gen-httpinterface 1.0.0\n")
+		fmt.Fprintf(os.Stderr, "protoc-gen-httpinterface 0.0.2\n")
 		os.Exit(0)
 	}
 
