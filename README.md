@@ -41,6 +41,26 @@ go install github.com/farhaan/protoc-gen-go-http-server-interface@latest
 
 Ensure that the `protoc` compiler is installed and that `$GOPATH/bin` is in your `$PATH`.
 
+### Building from Source
+
+To build with version information:
+
+```bash
+# Build with version info based on git tags
+make build-plugin
+
+# Check version information
+make version
+
+# Install with version info
+make install
+```
+
+The version is automatically determined from git tags. When built with `make`, the binary includes:
+- **Version**: Git tag or `dev-{commit}` if no tag
+- **Git Commit**: Short commit hash
+- **Build Time**: UTC timestamp
+
 ## Usage
 
 ### 1. Define your Protocol Buffer services with HTTP annotations

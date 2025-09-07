@@ -5,13 +5,14 @@ import (
 	"testing"
 	"text/template"
 
-	"github.com/golang/protobuf/protoc-gen-go/descriptor"
-	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
 	"google.golang.org/protobuf/proto"
+	descriptor "google.golang.org/protobuf/types/descriptorpb"
+	plugin "google.golang.org/protobuf/types/pluginpb"
 )
 
 // Test New function
 func TestNew(t *testing.T) {
+	t.Parallel()
 	g := New()
 	if g == nil {
 		t.Fatal("New() returned nil")
@@ -31,6 +32,7 @@ func TestNew(t *testing.T) {
 
 // Test shouldGenerate function
 func TestShouldGenerate(t *testing.T) {
+	t.Parallel()
 	g := New()
 
 	tests := []struct {
@@ -68,12 +70,8 @@ func mockGetHTTPRules(method *descriptor.MethodDescriptorProto) []HTTPRule {
 
 // Test hasHTTPRules function
 func TestHasHTTPRules(t *testing.T) {
-	// Save the original function and restore it after the test
-	originalGetHTTPRules := GetHTTPRules
-	GetHTTPRules = mockGetHTTPRules
-	defer func() { GetHTTPRules = originalGetHTTPRules }()
-
-	g := New()
+	t.Parallel()
+	g := New(mockGetHTTPRules)
 
 	// Create mock file with services
 	file := &descriptor.FileDescriptorProto{
@@ -126,22 +124,8 @@ func mockConvertPathPattern(pattern string) string {
 
 // Test buildServiceData function
 func TestBuildServiceData(t *testing.T) {
-	// Save the original functions and restore them after the test
-	originalGetHTTPRules := GetHTTPRules
-	originalGetPathParams := GetPathParams
-	originalConvertPathPattern := ConvertPathPattern
-
-	GetHTTPRules = mockGetHTTPRules
-	GetPathParams = mockGetPathParams
-	ConvertPathPattern = mockConvertPathPattern
-
-	defer func() {
-		GetHTTPRules = originalGetHTTPRules
-		GetPathParams = originalGetPathParams
-		ConvertPathPattern = originalConvertPathPattern
-	}()
-
-	g := New()
+	t.Parallel()
+	g := NewWith(mockGetHTTPRules, mockGetPathParams, mockConvertPathPattern)
 
 	// Create mock file
 	file := &descriptor.FileDescriptorProto{
@@ -217,6 +201,7 @@ func TestBuildServiceData(t *testing.T) {
 
 // Test generateCode function
 func TestGenerateCode(t *testing.T) {
+	t.Parallel()
 	g := New()
 
 	// Create simple service data
@@ -243,7 +228,7 @@ func TestGenerateCode(t *testing.T) {
 		},
 	}
 
-	code, err := g.generateCode(data)
+	code, err := g.GenerateCode(data)
 	if err != nil {
 		t.Fatalf("generateCode() error = %v", err)
 	}
@@ -268,6 +253,7 @@ func TestGenerateCode(t *testing.T) {
 
 // Test outputFilename method with different options
 func TestOutputFilename(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		protoFilename string
@@ -296,6 +282,7 @@ func TestOutputFilename(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			g := New()
 			g.Options = tt.options
 
@@ -309,6 +296,7 @@ func TestOutputFilename(t *testing.T) {
 
 // Test getPackageName function
 func TestGetPackageName(t *testing.T) {
+	t.Parallel()
 	g := New()
 
 	tests := []struct {
@@ -497,6 +485,7 @@ func TestGetPackageName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			gotPackage := g.getPackageName(tt.protoFile)
 			if gotPackage != tt.wantPackage {
 				t.Errorf("getPackageName() = %q, want %q", gotPackage, tt.wantPackage)
@@ -507,6 +496,7 @@ func TestGetPackageName(t *testing.T) {
 
 // Test getTypeName function
 func TestGetTypeName(t *testing.T) {
+	t.Parallel()
 	g := New()
 
 	tests := []struct {
@@ -528,22 +518,8 @@ func TestGetTypeName(t *testing.T) {
 
 // Test the full Generate function
 func TestGenerate(t *testing.T) {
-	// Save the original functions and restore them after the test
-	originalGetHTTPRules := GetHTTPRules
-	originalGetPathParams := GetPathParams
-	originalConvertPathPattern := ConvertPathPattern
-
-	GetHTTPRules = mockGetHTTPRules
-	GetPathParams = mockGetPathParams
-	ConvertPathPattern = mockConvertPathPattern
-
-	defer func() {
-		GetHTTPRules = originalGetHTTPRules
-		GetPathParams = originalGetPathParams
-		ConvertPathPattern = originalConvertPathPattern
-	}()
-
-	g := New()
+	t.Parallel()
+	g := NewWith(mockGetHTTPRules, mockGetPathParams, mockConvertPathPattern)
 
 	// Create a mock CodeGeneratorRequest
 	req := &plugin.CodeGeneratorRequest{
@@ -606,12 +582,10 @@ func TestGenerate(t *testing.T) {
 
 // Test the Generate function with no services that have HTTP rules
 func TestGenerateNoHTTPRules(t *testing.T) {
-	// Save the original functions and restore them after the test
-	originalGetHTTPRules := GetHTTPRules
-	GetHTTPRules = func(method *descriptor.MethodDescriptorProto) []HTTPRule { return nil }
-	defer func() { GetHTTPRules = originalGetHTTPRules }()
-
-	g := New()
+	t.Parallel()
+	// Mock function that returns no HTTP rules
+	noHTTPRulesExtractor := func(method *descriptor.MethodDescriptorProto) []HTTPRule { return nil }
+	g := New(noHTTPRulesExtractor)
 
 	req := &plugin.CodeGeneratorRequest{
 		FileToGenerate: []string{"test.proto"},
@@ -652,6 +626,7 @@ func TestGenerateNoHTTPRules(t *testing.T) {
 
 // Test error case for generateCode
 func TestGenerateCodeError(t *testing.T) {
+	t.Parallel()
 	// Create a generator with a bad template to force an error
 	g := New()
 	g.ParsedTemplates = g.ParsedTemplates.New("header")
@@ -662,7 +637,7 @@ func TestGenerateCodeError(t *testing.T) {
 		Services:    []ServiceInfo{},
 	}
 
-	_, err := g.generateCode(data)
+	_, err := g.GenerateCode(data)
 	if err == nil {
 		t.Error("generateCode() should return an error for invalid template")
 	}
@@ -670,22 +645,8 @@ func TestGenerateCodeError(t *testing.T) {
 
 // TestBuildServiceDataWithOptions tests buildServiceData with options
 func TestBuildServiceDataWithOptions(t *testing.T) {
-	// Save the original functions and restore them after the test
-	originalGetHTTPRules := GetHTTPRules
-	originalGetPathParams := GetPathParams
-	originalConvertPathPattern := ConvertPathPattern
-
-	GetHTTPRules = mockGetHTTPRules
-	GetPathParams = mockGetPathParams
-	ConvertPathPattern = mockConvertPathPattern
-
-	defer func() {
-		GetHTTPRules = originalGetHTTPRules
-		GetPathParams = originalGetPathParams
-		ConvertPathPattern = originalConvertPathPattern
-	}()
-
-	g := New()
+	t.Parallel()
+	g := NewWith(mockGetHTTPRules, mockGetPathParams, mockConvertPathPattern)
 
 	// Create mock file with options
 	file := &descriptor.FileDescriptorProto{
@@ -749,7 +710,7 @@ func TestTemplateExecution(t *testing.T) {
 	}
 
 	// Generate code
-	code, err := g.generateCode(data)
+	code, err := g.GenerateCode(data)
 	if err != nil {
 		t.Fatalf("generateCode() error = %v", err)
 	}
@@ -784,12 +745,8 @@ func TestTemplateExecution(t *testing.T) {
 
 // TestGenerateWithMultipleFiles tests generating code with multiple files
 func TestGenerateWithMultipleFiles(t *testing.T) {
-	// Save the original functions and restore them after the test
-	originalGetHTTPRules := GetHTTPRules
-	GetHTTPRules = mockGetHTTPRules
-	defer func() { GetHTTPRules = originalGetHTTPRules }()
-
-	g := New()
+	t.Parallel()
+	g := New(mockGetHTTPRules)
 
 	// Create a mock CodeGeneratorRequest with multiple files
 	req := &plugin.CodeGeneratorRequest{
@@ -853,6 +810,7 @@ func TestGenerateWithMultipleFiles(t *testing.T) {
 
 // Test ParseOptions function
 func TestParseOptions(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name           string
 		parameter      string
@@ -904,6 +862,7 @@ func TestParseOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			opts, err := ParseOptions(tt.parameter)
 
 			// Check error cases
@@ -935,10 +894,7 @@ func TestParseOptions(t *testing.T) {
 
 // Test Generate function with different options
 func TestGenerateWithOptions(t *testing.T) {
-	// Save the original functions and restore them after the test
-	originalGetHTTPRules := GetHTTPRules
-	GetHTTPRules = mockGetHTTPRules
-	defer func() { GetHTTPRules = originalGetHTTPRules }()
+	t.Parallel()
 
 	tests := []struct {
 		name           string
@@ -1017,7 +973,8 @@ func TestGenerateWithOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			g := New()
+			t.Parallel()
+			g := New(mockGetHTTPRules)
 
 			req := &plugin.CodeGeneratorRequest{
 				Parameter:      proto.String(tt.parameter),
@@ -1045,6 +1002,7 @@ func TestGenerateWithOptions(t *testing.T) {
 
 // Test Generate function with invalid options
 func TestGenerateWithInvalidOptions(t *testing.T) {
+	t.Parallel()
 	g := New()
 
 	req := &plugin.CodeGeneratorRequest{
