@@ -86,17 +86,18 @@ func New(httpExtractor ...HTTPRuleExtractor) *Generator {
 	}
 
 	return &Generator{
-		ParsedTemplates:        tmpl,
-		Options:               &Options{},
-		HTTPRuleExtractor:     extractor,
-		PathParamExtractor:    parsePathParams,
-		PathPatternConverter:  convertPathPattern,
-		SupportsEditions:      true,
+		ParsedTemplates:      tmpl,
+		Options:              &Options{},
+		HTTPRuleExtractor:    extractor,
+		PathParamExtractor:   parsePathParams,
+		PathPatternConverter: convertPathPattern,
+		SupportsEditions:     true,
 	}
 }
 
 // NewWith creates a new generator with all custom dependencies.
-func NewWith(httpExtractor HTTPRuleExtractor, pathExtractor PathParamExtractor, converter PathPatternConverter) *Generator {
+func NewWith(httpExtractor HTTPRuleExtractor, pathExtractor PathParamExtractor,
+	converter PathPatternConverter) *Generator {
 	// Parse the templates
 	tmpl := template.New("httpinterface").Funcs(template.FuncMap{
 		"lower": strings.ToLower,
@@ -115,12 +116,12 @@ func NewWith(httpExtractor HTTPRuleExtractor, pathExtractor PathParamExtractor, 
 	tmpl = template.Must(tmpl.New("service").Parse(serviceTemplate))
 
 	return &Generator{
-		ParsedTemplates:        tmpl,
-		Options:               &Options{},
-		HTTPRuleExtractor:     httpExtractor,
-		PathParamExtractor:    pathExtractor,
-		PathPatternConverter:  converter,
-		SupportsEditions:      true,
+		ParsedTemplates:      tmpl,
+		Options:              &Options{},
+		HTTPRuleExtractor:    httpExtractor,
+		PathParamExtractor:   pathExtractor,
+		PathPatternConverter: converter,
+		SupportsEditions:     true,
 	}
 }
 
@@ -130,14 +131,14 @@ func (g *Generator) Generate(req *plugin.CodeGeneratorRequest) *plugin.CodeGener
 
 	// Declare support for protobuf features
 	supportedFeatures := uint64(plugin.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
-	
+
 	// Add editions support if the generator supports it
 	if g.SupportsEditions {
 		supportedFeatures |= uint64(plugin.CodeGeneratorResponse_FEATURE_SUPPORTS_EDITIONS)
 	}
-	
+
 	resp.SupportedFeatures = proto.Uint64(supportedFeatures)
-	
+
 	// Set maximum edition support for editions
 	if g.SupportsEditions {
 		resp.MaximumEdition = proto.Int32(int32(descriptor.Edition_EDITION_2023))

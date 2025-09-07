@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 )
 
@@ -89,4 +90,21 @@ func GenerateCompatibilityServiceProto(outputPath, packageName, serviceName stri
 		ServiceName: serviceName,
 	}
 	return GenerateProtoFromTemplate("compatibility_service", outputPath, data)
+}
+
+// GenerateEditionsServiceProto generates an editions-syntax proto file with comprehensive HTTP bindings
+func GenerateEditionsServiceProto(outputPath, packageName, serviceName string) error {
+	// For dotted package names, use the last part for the Go package
+	goPackageName := packageName
+	if strings.Contains(packageName, ".") {
+		parts := strings.Split(packageName, ".")
+		goPackageName = parts[len(parts)-1]
+	}
+	
+	data := ProtoTemplateData{
+		Package:     packageName,
+		GoPackage:   "github.com/farhaan/protoc-gen-go-http-server-interface/tests/" + goPackageName,
+		ServiceName: serviceName,
+	}
+	return GenerateProtoFromTemplate("editions_service", outputPath, data)
 }
