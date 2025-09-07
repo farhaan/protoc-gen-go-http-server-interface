@@ -14,6 +14,9 @@ linters-settings:
         - "$gostd"
         - "github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface"
         - "google.golang.org/protobuf"
+        - "google.golang.org/genproto"
+        - "tests/internal"
+        - "golang.org/x/tools"
 
 run:
   timeout: 5m
@@ -26,7 +29,6 @@ linters:
     - staticcheck
     - dupl
     - depguard
-    - funlen
     - lll
     - testpackage
     - gocyclo
@@ -42,5 +44,7 @@ issues:
     - path: httpinterface/.*_test\.go
       linters:
         - testpackage
-        - funlen
         - lll
+    - path: httpinterface/parser/.*\.go
+      linters:
+        - dupl

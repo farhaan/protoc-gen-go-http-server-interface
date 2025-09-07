@@ -115,7 +115,7 @@ func TestProto3EnumHandling(t *testing.T) {
 // Test comprehensive HTTP method support
 func TestHTTPMethodSupport(t *testing.T) {
 	t.Parallel()
-	
+
 	// Mock function that returns different HTTP methods
 	httpRuleExtractor := func(method *descriptorpb.MethodDescriptorProto) []HTTPRule {
 		methodName := method.GetName()

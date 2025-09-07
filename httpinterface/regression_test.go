@@ -145,7 +145,7 @@ func TestRegressionMiddlewareSupport(t *testing.T) {
 // TestRegressionPathParameterHandling ensures path parameter extraction works
 func TestRegressionPathParameterHandling(t *testing.T) {
 	t.Parallel()
-	
+
 	tests := []struct {
 		pattern  string
 		expected []string
@@ -219,7 +219,7 @@ func TestRegressionOutputFilenames(t *testing.T) {
 // TestRegressionMultipleHTTPBindings ensures multiple HTTP bindings work
 func TestRegressionMultipleHTTPBindings(t *testing.T) {
 	t.Parallel()
-	
+
 	// Mock function that returns multiple HTTP bindings
 	httpRuleExtractor := func(method *descriptorpb.MethodDescriptorProto) []HTTPRule {
 		if method.GetName() == "GetResource" {
@@ -277,7 +277,7 @@ func TestRegressionMultipleHTTPBindings(t *testing.T) {
 // TestRegressionServiceFiltering ensures services without HTTP rules are filtered out
 func TestRegressionServiceFiltering(t *testing.T) {
 	t.Parallel()
-	
+
 	// Mock function that only returns rules for specific methods
 	httpRuleExtractor := func(method *descriptorpb.MethodDescriptorProto) []HTTPRule {
 		if method.GetName() == "HTTPMethod" {
