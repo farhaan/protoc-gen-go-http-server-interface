@@ -11,7 +11,6 @@ type Options struct {
 	PathsSourceRelative bool
 	// OutputPrefix is an optional prefix for output files
 	OutputPrefix string
-	// Other options can be added here as needed
 }
 
 // ParseOptions parses the parameter string from protoc into an Options struct
@@ -24,29 +23,45 @@ func ParseOptions(parameter string) (*Options, error) {
 
 	params := strings.Split(parameter, ",")
 	for _, p := range params {
-		kv := strings.SplitN(p, "=", 2)
-		if len(kv) != 2 {
-			return nil, fmt.Errorf("invalid parameter: %s", p)
-		}
-
-		key := strings.TrimSpace(kv[0])
-		value := strings.TrimSpace(kv[1])
-
-		switch key {
-		case "paths":
-			if value == "source_relative" {
-				options.PathsSourceRelative = true
-			} else if value != "import" {
-				return nil, fmt.Errorf("unknown paths option: %s", value)
-			}
-		case "output_prefix":
-			options.OutputPrefix = value
-		default:
-			// You might want to either error on unknown options, or just ignore them
-			// For now, we'll log a warning and continue
-			fmt.Printf("Warning: unknown option: %s=%s\n", key, value)
+		if err := parseParameter(options, p); err != nil {
+			return nil, err
 		}
 	}
 
 	return options, nil
+}
+
+// parseParameter parses a single parameter key=value pair
+func parseParameter(options *Options, param string) error {
+	kv := strings.SplitN(param, "=", 2)
+	if len(kv) != 2 {
+		return fmt.Errorf("invalid parameter: %s", param)
+	}
+
+	key := strings.TrimSpace(kv[0])
+	value := strings.TrimSpace(kv[1])
+
+	switch key {
+	case "paths":
+		return parsePathsOption(options, value)
+	case "output_prefix":
+		options.OutputPrefix = value
+		return nil
+	default:
+		return fmt.Errorf("unknown option: %s (valid options: paths, output_prefix)", key)
+	}
+}
+
+// parsePathsOption parses the paths option
+func parsePathsOption(options *Options, value string) error {
+	switch value {
+	case "source_relative":
+		options.PathsSourceRelative = true
+		return nil
+	case "import":
+		// Default behavior, no action needed
+		return nil
+	default:
+		return fmt.Errorf("unknown paths option: %s", value)
+	}
 }

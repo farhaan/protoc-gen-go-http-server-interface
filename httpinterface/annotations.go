@@ -3,9 +3,9 @@ package httpinterface
 import (
 	"regexp"
 
-	"github.com/golang/protobuf/protoc-gen-go/descriptor"
 	options "google.golang.org/genproto/googleapis/api/annotations"
 	"google.golang.org/protobuf/proto"
+	descriptor "google.golang.org/protobuf/types/descriptorpb"
 )
 
 // HTTPRuleExtractor is the function type for extracting HTTP rules
@@ -39,9 +39,6 @@ func parseMethodHTTPRules(method *descriptor.MethodDescriptorProto) []HTTPRule {
 	return rules
 }
 
-// GetHTTPRules is the exported variable for HTTP rule extraction
-// This allows the function to be replaced in tests
-var GetHTTPRules HTTPRuleExtractor = parseMethodHTTPRules
 
 // parseHTTPRule extracts method, pattern, and body from an HttpRule
 func parseHTTPRule(httpRule *options.HttpRule) HTTPRule {
@@ -91,9 +88,6 @@ func parsePathParams(pattern string) []string {
 	return params
 }
 
-// GetPathParams is the exported variable for path parameter extraction
-// This allows the function to be replaced in tests
-var GetPathParams PathParamExtractor = parsePathParams
 
 // PathPatternConverter is the function type for converting path patterns
 type PathPatternConverter func(pattern string) string
@@ -103,6 +97,3 @@ func convertPathPattern(pattern string) string {
 	return pattern
 }
 
-// ConvertPathPattern is the exported variable for path pattern conversion
-// This allows the function to be replaced in tests
-var ConvertPathPattern PathPatternConverter = convertPathPattern

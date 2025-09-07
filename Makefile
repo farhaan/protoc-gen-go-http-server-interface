@@ -1,31 +1,34 @@
-# Makefile for testing
-.PHONY: test test-unit test-integration
+# Makefile for protoc-gen-go-http-server-interface
+.PHONY: test build install clean
 
-# Test commands
-test: test-unit test-integration
+# Version information
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_TIME ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-# Run unit tests
-test-unit:
-	go test -timeout=300s -coverprofile=cover.out -race -gcflags=all=-l ./...
+# Build flags
+LDFLAGS = -X github.com/farhaan/protoc-gen-go-http-server-interface/version.Version=$(VERSION) \
+          -X github.com/farhaan/protoc-gen-go-http-server-interface/version.GitCommit=$(GIT_COMMIT) \
+          -X github.com/farhaan/protoc-gen-go-http-server-interface/version.BuildTime=$(BUILD_TIME)
 
-# Run integration tests
-test-integration:
-	INTEGRATION_TEST=1 go test -v ./tests/...
+# Test with parallel execution
+test:
+	go test -timeout=300s -race -parallel=8 ./...
 
-# Full test and build workflow
-all: test build
+# Build the plugin  
+build:
+	mkdir -p ./bin
+	go build -ldflags "$(LDFLAGS)" -o ./bin/protoc-gen-go-http-server-interface .
 
-# Build targets
-build: build-plugin
-
-build-plugin:
-	go build -o ./bin/protoc-gen-httpinterface ./plugin
-
-# Install the plugin locally for testing
+# Install the plugin locally
 install:
-	go install ./plugin
+	go install -ldflags "$(LDFLAGS)" .
+
+# Install as go tool (for users)
+install-tool:
+	go install .
 
 # Clean up
 clean:
-	rm -f ./bin/protoc-gen-httpinterface
-	go clean -testcache	-
+	rm -rf ./bin/
+	go clean -testcache

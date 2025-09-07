@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "github.com/example/api/v1;apiv1";
+
+import "google/api/annotations.proto";
+
+// UserService handles user operations
+service UserService {
+  rpc GetUser(GetUserRequest) returns (User) {
+    option (google.api.http) = {
+      get: "/api/v1/users/{id}"
+    };
+  }
+}
+
+// OrderService handles order operations  
+service OrderService {
+  rpc GetOrder(GetOrderRequest) returns (Order) {
+    option (google.api.http) = {
+      get: "/api/v1/orders/{id}"
+    };
+  }
+  
+  rpc CreateOrder(CreateOrderRequest) returns (Order) {
+    option (google.api.http) = {
+      post: "/api/v1/orders"
+      body: "*"
+    };
+  }
+}
+
+// ProductService handles product operations
+service ProductService {
+  rpc ListProducts(ListProductsRequest) returns (ListProductsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/products"
+    };
+  }
+}
+
+message User {
+  string id = 1;
+  string name = 2;
+}
+
+message Order {
+  string id = 1;
+  string user_id = 2;
+  repeated string product_ids = 3;
+}
+
+message Product {
+  string id = 1;
+  string name = 2;
+  double price = 3;
+}
+
+message GetUserRequest {
+  string id = 1;
+}
+
+message GetOrderRequest {
+  string id = 1;
+}
+
+message CreateOrderRequest {
+  string user_id = 1;
+  repeated string product_ids = 2;
+}
+
+message ListProductsRequest {
+  int32 limit = 1;
+}
+
+message ListProductsResponse {
+  repeated Product products = 1;
+}
