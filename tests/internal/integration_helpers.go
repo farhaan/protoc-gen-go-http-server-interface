@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	
+	"golang.org/x/tools/go/packages"
 )
 
 // HasProtoc checks if protoc is available in the system
@@ -41,17 +43,46 @@ func FindPluginBinary() (string, error) {
 	return "", fmt.Errorf("protoc-gen-go-http-server-interface binary not found")
 }
 
+// getGoModuleProtoPath attempts to get Google proto paths from Go modules
+func getGoModuleProtoPath() string {
+	cfg := &packages.Config{Mode: packages.NeedModule}
+	pkgs, err := packages.Load(cfg, "google.golang.org/genproto")
+	if err != nil {
+		return ""
+	}
+	
+	for _, pkg := range pkgs {
+		if pkg.Module != nil && pkg.Module.Dir != "" {
+			googleapisPath := filepath.Join(pkg.Module.Dir, "googleapis")
+			if _, err := os.Stat(filepath.Join(googleapisPath, "google", "api")); err == nil {
+				return googleapisPath
+			}
+		}
+	}
+	
+	return ""
+}
+
 // RunProtoc runs protoc with our plugin for a single proto file
 func RunProtoc(workDir, pluginPath, outputArg, protoFile string) error {
-	// Get absolute path to parent directory for google proto files
-	parentDir, _ := filepath.Abs("..")
-
-	cmd := exec.Command("protoc",
-		"--plugin=protoc-gen-go-http-server-interface="+pluginPath,
+	// Build protoc arguments
+	args := []string{
+		"--plugin=protoc-gen-go-http-server-interface=" + pluginPath,
 		outputArg,
-		"--proto_path="+workDir,
-		"--proto_path="+parentDir, // For google/api imports
-		protoFile)
+		"--proto_path=" + workDir,
+	}
+	
+	// Add Google proto paths - try Go modules first, then local files
+	if googleProtoPath := getGoModuleProtoPath(); googleProtoPath != "" {
+		args = append(args, "--proto_path="+googleProtoPath)
+	} else {
+		// Fallback to local files
+		parentDir, _ := filepath.Abs("..")
+		args = append(args, "--proto_path="+parentDir) // For google/api imports
+	}
+	
+	args = append(args, protoFile)
+	cmd := exec.Command("protoc", args...)
 
 	cmd.Dir = workDir
 

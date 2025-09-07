@@ -32,3 +32,4 @@ install-tool:
 clean:
 	rm -rf ./bin/
 	go clean -testcache
+
