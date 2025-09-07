@@ -1,9 +1,9 @@
-// Command protoc-gen-httpinterface is a plugin for the Google protocol buffer compiler to generate
-// HTTP interface code. It is linked into protoc at runtime.
+// Command protoc-gen-go-http-server-interface is a plugin for the Google protocol buffer compiler to generate
+// HTTP server interface code. It is linked into protoc at runtime.
 //
 // Usage:
 //
-//	protoc --httpinterface_out=paths=source_relative:. path/to/file.proto
+//	protoc --go_http_server_interface_out=paths=source_relative:. path/to/file.proto
 package main
 
 import (
@@ -12,10 +12,11 @@ import (
 	"io"
 	"os"
 
-	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
 	"google.golang.org/protobuf/proto"
+	plugin "google.golang.org/protobuf/types/pluginpb"
 
 	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface"
+	"github.com/farhaan/protoc-gen-go-http-server-interface/version"
 )
 
 func main() {
@@ -25,7 +26,7 @@ func main() {
 	flag.Parse()
 
 	if showVersion {
-		fmt.Fprintf(os.Stderr, "protoc-gen-httpinterface 1.0.0\n")
+		fmt.Fprintf(os.Stderr, "protoc-gen-go-http-server-interface %s\n", version.GetVersion())
 		os.Exit(0)
 	}
 

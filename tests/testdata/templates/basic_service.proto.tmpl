@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package {{.Package}};
+
+option go_package = "{{.GoPackage}}";
+
+import "google/api/annotations.proto";
+
+service {{.ServiceName}} {
+  rpc GetTest(GetTestRequest) returns (TestResponse) {
+    option (google.api.http) = {
+      get: "/test/{id}"
+    };
+  }
+  rpc CreateTest(CreateTestRequest) returns (TestResponse) {
+    option (google.api.http) = {
+      post: "/test"
+      body: "*"
+    };
+  }
+}
+
+message GetTestRequest {
+  string id = 1;
+}
+
+message CreateTestRequest {
+  string name = 1;
+}
+
+message TestResponse {
+  string id = 1;
+  string name = 2;
+}

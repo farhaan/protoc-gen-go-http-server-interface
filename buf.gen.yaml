@@ -1,0 +1,5 @@
+version: v1
+plugins:
+  - plugin: go-http-server-interface
+    out: .
+    opt: paths=source_relative
