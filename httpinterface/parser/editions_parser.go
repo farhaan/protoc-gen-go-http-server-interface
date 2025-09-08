@@ -8,6 +8,8 @@ import (
 	descriptor "google.golang.org/protobuf/types/descriptorpb"
 )
 
+var pathParamRegex = regexp.MustCompile(`\{([^/{}]+)\}`)
+
 // EditionsParser implements parsing for editions files
 type EditionsParser struct{}
 
@@ -79,8 +81,7 @@ func (p *EditionsParser) parseHTTPRule(httpRule *options.HttpRule) HTTPRule {
 // ParsePathParams extracts path parameters from a URL pattern
 func (p *EditionsParser) ParsePathParams(pattern string) []string {
 	params := []string{}
-	re := regexp.MustCompile(`\{([^/{}]+)\}`)
-	matches := re.FindAllStringSubmatch(pattern, -1)
+	matches := pathParamRegex.FindAllStringSubmatch(pattern, -1)
 
 	for _, match := range matches {
 		if len(match) >= 2 {

@@ -8,6 +8,8 @@ import (
 	descriptor "google.golang.org/protobuf/types/descriptorpb"
 )
 
+var proto3PathParamRegex = regexp.MustCompile(`\{([^/{}]+)\}`)
+
 // Proto3Parser implements parsing for proto3 files
 type Proto3Parser struct{}
 
@@ -79,8 +81,7 @@ func (p *Proto3Parser) parseHTTPRule(httpRule *options.HttpRule) HTTPRule {
 // ParsePathParams extracts path parameters from a URL pattern
 func (p *Proto3Parser) ParsePathParams(pattern string) []string {
 	params := []string{}
-	re := regexp.MustCompile(`\{([^/{}]+)\}`)
-	matches := re.FindAllStringSubmatch(pattern, -1)
+	matches := proto3PathParamRegex.FindAllStringSubmatch(pattern, -1)
 
 	for _, match := range matches {
 		if len(match) >= 2 {

@@ -9,6 +9,8 @@ import (
 	descriptor "google.golang.org/protobuf/types/descriptorpb"
 )
 
+var pathParamRegex = regexp.MustCompile(`\{([^/{}]+)\}`)
+
 // HTTPRule represents an HTTP binding from annotations.
 type HTTPRule struct {
 	Method     string
@@ -88,8 +90,7 @@ func parseHTTPRule(httpRule *options.HttpRule) HTTPRule {
 // parsePathParams extracts path parameters from a URL pattern using regex
 func parsePathParams(pattern string) []string {
 	params := []string{}
-	re := regexp.MustCompile(`\{([^/{}]+)\}`)
-	matches := re.FindAllStringSubmatch(pattern, -1)
+	matches := pathParamRegex.FindAllStringSubmatch(pattern, -1)
 
 	for _, match := range matches {
 		if len(match) >= 2 {
