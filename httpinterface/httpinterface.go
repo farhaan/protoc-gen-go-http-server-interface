@@ -129,6 +129,17 @@ func NewWith(httpExtractor HTTPRuleExtractor, pathExtractor PathParamExtractor,
 func (g *Generator) Generate(req *plugin.CodeGeneratorRequest) *plugin.CodeGeneratorResponse {
 	resp := new(plugin.CodeGeneratorResponse)
 
+	// Parse options from parameter first
+	if err := g.parseAndSetOptions(req.GetParameter()); err != nil {
+		resp.Error = proto.String(fmt.Sprintf("invalid options: %v", err))
+		return resp
+	}
+
+	// Set SupportsEditions based on options
+	if g.Options != nil && g.Options.Editions {
+		g.SupportsEditions = true
+	}
+
 	// Declare support for protobuf features
 	supportedFeatures := uint64(plugin.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 
@@ -139,15 +150,10 @@ func (g *Generator) Generate(req *plugin.CodeGeneratorRequest) *plugin.CodeGener
 
 	resp.SupportedFeatures = proto.Uint64(supportedFeatures)
 
-	// Set maximum edition support for editions
+	// Set edition support range for editions
 	if g.SupportsEditions {
+		resp.MinimumEdition = proto.Int32(int32(descriptor.Edition_EDITION_PROTO3))
 		resp.MaximumEdition = proto.Int32(int32(descriptor.Edition_EDITION_2023))
-	}
-
-	// Parse options from parameter
-	if err := g.parseAndSetOptions(req.GetParameter()); err != nil {
-		resp.Error = proto.String(fmt.Sprintf("invalid options: %v", err))
-		return resp
 	}
 
 	// Process each proto file

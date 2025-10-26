@@ -11,6 +11,8 @@ type Options struct {
 	PathsSourceRelative bool
 	// OutputPrefix is an optional prefix for output files
 	OutputPrefix string
+	// Editions enables support for protobuf editions
+	Editions bool
 }
 
 // ParseOptions parses the parameter string from protoc into an Options struct
@@ -47,8 +49,10 @@ func parseParameter(options *Options, param string) error {
 	case "output_prefix":
 		options.OutputPrefix = value
 		return nil
+	case "editions":
+		return parseEditionsOption(options, value)
 	default:
-		return fmt.Errorf("unknown option: %s (valid options: paths, output_prefix)", key)
+		return fmt.Errorf("unknown option: %s (valid options: paths, output_prefix, editions)", key)
 	}
 }
 
@@ -63,5 +67,19 @@ func parsePathsOption(options *Options, value string) error {
 		return nil
 	default:
 		return fmt.Errorf("unknown paths option: %s", value)
+	}
+}
+
+// parseEditionsOption parses the editions option
+func parseEditionsOption(options *Options, value string) error {
+	switch value {
+	case "true":
+		options.Editions = true
+		return nil
+	case "false":
+		options.Editions = false
+		return nil
+	default:
+		return fmt.Errorf("unknown editions option: %s (valid values: true, false)", value)
 	}
 }
