@@ -4,8 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface"
 	internal "tests/internal"
+
+	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface"
 )
 
 // TestIntegration_FullWorkflow tests the complete workflow from options to generated code

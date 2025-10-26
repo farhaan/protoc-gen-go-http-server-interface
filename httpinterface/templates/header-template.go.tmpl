@@ -73,9 +73,22 @@ func (g *RouteGroup) Group(prefix string, middlewares ...Middleware) *RouteGroup
 		prefix = g.prefix + prefix
 	}
 	
+	// Combine parent and new middlewares, filtering out nils
+	combinedMiddlewares := make([]Middleware, 0, len(g.middlewares)+len(middlewares))
+	for _, mw := range g.middlewares {
+		if mw != nil {
+			combinedMiddlewares = append(combinedMiddlewares, mw)
+		}
+	}
+	for _, mw := range middlewares {
+		if mw != nil {
+			combinedMiddlewares = append(combinedMiddlewares, mw)
+		}
+	}
+
 	return &RouteGroup{
 		prefix:       prefix,
-		middlewares:  append(append([]Middleware{}, g.middlewares...), middlewares...),
+		middlewares:  combinedMiddlewares,
 		routes:       []routeDef{}, // Each group gets its own routes slice
 		mux:          g.mux,        // Share the same mux
 	}
@@ -83,7 +96,12 @@ func (g *RouteGroup) Group(prefix string, middlewares ...Middleware) *RouteGroup
 
 // Use applies middlewares to all routes registered after this call
 func (g *RouteGroup) Use(middlewares ...Middleware) *RouteGroup {
-	g.middlewares = append(g.middlewares, middlewares...)
+	// Filter out nil middlewares before appending
+	for _, mw := range middlewares {
+		if mw != nil {
+			g.middlewares = append(g.middlewares, mw)
+		}
+	}
 	return g
 }
 
@@ -98,18 +116,29 @@ func (g *RouteGroup) HandleFunc(method, pattern string, handler http.HandlerFunc
 	} else {
 		fullPattern = g.prefix + pattern
 	}
-	
+
 	// Apply middleware chain to the handler
 	var finalHandler http.Handler = handler
-	
-	// Apply route-specific middlewares first (innermost)
-	for i := len(middlewares) - 1; i >= 0; i-- {
-		finalHandler = middlewares[i](finalHandler)
+
+	// Filter and collect route-specific middlewares
+	validMiddlewares := make([]Middleware, 0, len(middlewares))
+	for _, mw := range middlewares {
+		if mw != nil {
+			validMiddlewares = append(validMiddlewares, mw)
+		}
 	}
-	
+
+	// Apply route-specific middlewares first (innermost)
+	for i := len(validMiddlewares) - 1; i >= 0; i-- {
+		finalHandler = validMiddlewares[i](finalHandler)
+	}
+
 	// Apply group middlewares (outermost)
 	for i := len(g.middlewares) - 1; i >= 0; i-- {
-		finalHandler = g.middlewares[i](finalHandler)
+		mw := g.middlewares[i]
+		if mw != nil {
+			finalHandler = mw(finalHandler)
+		}
 	}
 	
 	// Store and register the route definition
@@ -120,13 +149,16 @@ func (g *RouteGroup) HandleFunc(method, pattern string, handler http.HandlerFunc
 	}
 	g.routes = append(g.routes, routeDefinition)
 
-	routeDefinitionKey := routeDefinition.method + " " + routeDefinition.pattern
-	g.mux.Handle(routeDefinitionKey, routeDefinition.handler)
-	
+	// Register with mux if available
+	if g.mux != nil {
+		routeDefinitionKey := routeDefinition.method + " " + routeDefinition.pattern
+		g.mux.Handle(routeDefinitionKey, routeDefinition.handler)
+	}
+
 }
 
 func (g RouteGroup) GetRoutes() []string {
-	routes := make([]string, len(g.routes))
+	routes := make([]string, 0, len(g.routes))
 	for _, route := range g.routes {
 		routes = append(routes, route.method+" "+route.pattern)
 	}
@@ -136,5 +168,9 @@ func (g RouteGroup) GetRoutes() []string {
 
 // ServeHTTP implements the http.Handler interface
 func (g *RouteGroup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	g.mux.ServeHTTP(w, r)
+	if g.mux != nil {
+		g.mux.ServeHTTP(w, r)
+	} else {
+		http.NotFound(w, r)
+	}
 }
