@@ -7,6 +7,9 @@ type {{ .Name }}Handler interface {
 
 // Register{{ .Name }}Routes registers HTTP routes for {{ .Name }}
 func Register{{ .Name }}Routes(r Routes, handler {{ .Name }}Handler) {
+	if r == nil || handler == nil {
+		return
+	}
 {{- range $method := .Methods }}
 {{- range $method.HTTPRules }}
     r.HandleFunc("{{ .Method }}", "{{ .Pattern }}", handler.Handle{{ $method.Name }})
@@ -23,6 +26,9 @@ func (g *RouteGroup) Register{{ .Name }}Routes(handler {{ .Name }}Handler) {
 {{- range $method.HTTPRules }}
 // Register{{ $method.Name }}Route is a helper that registers the {{ $method.Name }} handler
 func Register{{ $method.Name }}Route(r Routes, handler {{ $.Name }}Handler, middlewares ...Middleware) {
+	if r == nil || handler == nil {
+		return
+	}
     r.HandleFunc("{{ .Method }}", "{{ .Pattern }}", handler.Handle{{ $method.Name }}, middlewares...)
 }
 
