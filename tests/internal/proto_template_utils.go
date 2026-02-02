@@ -100,11 +100,21 @@ func GenerateEditionsServiceProto(outputPath, packageName, serviceName string) e
 		parts := strings.Split(packageName, ".")
 		goPackageName = parts[len(parts)-1]
 	}
-	
+
 	data := ProtoTemplateData{
 		Package:     packageName,
 		GoPackage:   "github.com/farhaan/protoc-gen-go-http-server-interface/tests/" + goPackageName,
 		ServiceName: serviceName,
 	}
 	return GenerateProtoFromTemplate("editions_service", outputPath, data)
+}
+
+// GenerateCustomHTTPServiceProto generates a proto file with custom HTTP methods (HEAD, OPTIONS, etc.)
+func GenerateCustomHTTPServiceProto(outputPath, packageName, serviceName string) error {
+	data := ProtoTemplateData{
+		Package:     packageName,
+		GoPackage:   fmt.Sprintf("github.com/example/%s;%s", packageName, packageName),
+		ServiceName: serviceName,
+	}
+	return GenerateProtoFromTemplate("custom_http_service", outputPath, data)
 }

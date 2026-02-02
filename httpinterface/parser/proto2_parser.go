@@ -70,8 +70,10 @@ func (p *Proto2Parser) parseHTTPRule(httpRule *options.HttpRule) HTTPRule {
 		rule.Method = "PATCH"
 		rule.Pattern = pattern.Patch
 	case *options.HttpRule_Custom:
-		rule.Method = pattern.Custom.Kind
-		rule.Pattern = pattern.Custom.Path
+		if pattern.Custom != nil {
+			rule.Method = pattern.Custom.Kind
+			rule.Pattern = pattern.Custom.Path
+		}
 	}
 
 	rule.PathParams = p.ParsePathParams(rule.Pattern)

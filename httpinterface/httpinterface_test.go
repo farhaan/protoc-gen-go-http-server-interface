@@ -1090,3 +1090,69 @@ func TestGenerateCodeMultipleBindingsNoDuplicates(t *testing.T) {
 		t.Error("Missing binding count comment")
 	}
 }
+
+// TestCustomHTTPPatternNilSafety ensures that nil Custom patterns don't cause panics
+func TestCustomHTTPPatternNilSafety(t *testing.T) {
+	t.Parallel()
+	g := New()
+
+	// Test with custom HTTP method (non-nil Custom)
+	dataWithCustom := &ServiceData{
+		PackageName: "test",
+		Services: []ServiceInfo{
+			{
+				Name: "CustomService",
+				Methods: []MethodInfo{
+					{
+						Name:       "CustomMethod",
+						InputType:  "CustomRequest",
+						OutputType: "CustomResponse",
+						HTTPRules: []HTTPRule{
+							{Method: "HEAD", Pattern: "/v1/health", Body: ""},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	code, err := g.GenerateCode(dataWithCustom)
+	if err != nil {
+		t.Fatalf("GenerateCode() with custom method error = %v", err)
+	}
+
+	if !strings.Contains(code, `r.HandleFunc("HEAD"`) {
+		t.Error("Missing HEAD method registration")
+	}
+
+	// Test with empty method (simulates nil Custom scenario after parsing)
+	dataWithEmpty := &ServiceData{
+		PackageName: "test",
+		Services: []ServiceInfo{
+			{
+				Name: "EmptyService",
+				Methods: []MethodInfo{
+					{
+						Name:       "EmptyMethod",
+						InputType:  "EmptyRequest",
+						OutputType: "EmptyResponse",
+						HTTPRules: []HTTPRule{
+							{Method: "", Pattern: "", Body: ""},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Should not panic and should handle empty methods gracefully
+	code, err = g.GenerateCode(dataWithEmpty)
+	if err != nil {
+		t.Fatalf("GenerateCode() with empty method error = %v", err)
+	}
+
+	// Empty method should still generate valid code (even if route is empty)
+	if code == "" {
+		t.Error("Expected non-empty generated code")
+	}
+}

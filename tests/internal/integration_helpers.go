@@ -43,6 +43,11 @@ func FindPluginBinary() (string, error) {
 	return "", fmt.Errorf("protoc-gen-go-http-server-interface binary not found")
 }
 
+// HasGoogleAPIs checks if googleapis proto files are available
+func HasGoogleAPIs() bool {
+	return getGoModuleProtoPath() != ""
+}
+
 // getGoModuleProtoPath attempts to get Google proto paths from Go modules
 func getGoModuleProtoPath() string {
 	cfg := &packages.Config{Mode: packages.NeedModule}
