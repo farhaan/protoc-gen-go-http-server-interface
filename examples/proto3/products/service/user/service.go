@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pb "github.com/farhaan/protoc-gen-go-http-server-interface/examples/product/pb/user" // Your generated proto package
+	pb "github.com/farhaan/protoc-gen-go-http-server-interface/examples/proto3/products/pb/user" // Your generated proto package
 )
 
 // UserService implements the UserService defined in the proto

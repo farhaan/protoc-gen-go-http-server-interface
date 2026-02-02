@@ -10,8 +10,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	pb "github.com/farhaan/protoc-gen-go-http-server-interface/examples/product/pb/product" // Your generated proto package
-	service "github.com/farhaan/protoc-gen-go-http-server-interface/examples/product/service/product"
+	pb "github.com/farhaan/protoc-gen-go-http-server-interface/examples/proto3/products/pb/product" // Your generated proto package
+	service "github.com/farhaan/protoc-gen-go-http-server-interface/examples/proto3/products/service/product"
 )
 
 // ProductHandler implements the HTTP handlers for the Product service

@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	pb "github.com/farhaan/protoc-gen-go-http-server-interface/examples/product/pb/product" // Your generated proto package
+	pb "github.com/farhaan/protoc-gen-go-http-server-interface/examples/proto3/products/pb/product" // Your generated proto package
 )
 
 // ProductService implements the ProductService defined in the proto

@@ -5,13 +5,13 @@ import (
 	"net/http"
 	"time"
 
-	productHandler "github.com/farhaan/protoc-gen-go-http-server-interface/examples/product/handler/product"
-	productPb "github.com/farhaan/protoc-gen-go-http-server-interface/examples/product/pb/product"
-	productSvc "github.com/farhaan/protoc-gen-go-http-server-interface/examples/product/service/product"
+	productHandler "github.com/farhaan/protoc-gen-go-http-server-interface/examples/proto3/products/handler/product"
+	productPb "github.com/farhaan/protoc-gen-go-http-server-interface/examples/proto3/products/pb/product"
+	productSvc "github.com/farhaan/protoc-gen-go-http-server-interface/examples/proto3/products/service/product"
 
-	userHandler "github.com/farhaan/protoc-gen-go-http-server-interface/examples/product/handler/user"
-	userPb "github.com/farhaan/protoc-gen-go-http-server-interface/examples/product/pb/user"
-	userSvc "github.com/farhaan/protoc-gen-go-http-server-interface/examples/product/service/user"
+	userHandler "github.com/farhaan/protoc-gen-go-http-server-interface/examples/proto3/products/handler/user"
+	userPb "github.com/farhaan/protoc-gen-go-http-server-interface/examples/proto3/products/pb/user"
+	userSvc "github.com/farhaan/protoc-gen-go-http-server-interface/examples/proto3/products/service/user"
 )
 
 // Common middleware types

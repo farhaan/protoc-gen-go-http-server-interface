@@ -1,0 +1,184 @@
+edition = "2023";
+
+package taskservice.v1;
+
+option features.field_presence = IMPLICIT;
+
+import "google/api/annotations.proto";
+
+// TaskService provides CRUD operations for tasks
+service TaskService {
+  // CreateTask creates a new task
+  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/tasks"
+      body: "*"
+    };
+  }
+
+  // GetTask retrieves a task by ID
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/tasks/{task_id}"
+    };
+  }
+
+  // UpdateTask updates an existing task (supports both PUT and PATCH)
+  rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/tasks/{task_id}"
+      body: "task"
+      additional_bindings {
+        patch: "/api/v1/tasks/{task_id}"
+        body: "task"
+      }
+    };
+  }
+
+  // DeleteTask deletes a task
+  rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse) {
+    option (google.api.http) = {
+      delete: "/api/v1/tasks/{task_id}"
+    };
+  }
+
+  // ListTasks lists all tasks with optional filtering
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/tasks"
+    };
+  }
+
+  // CompleteTask marks a task as complete (custom action)
+  rpc CompleteTask(CompleteTaskRequest) returns (CompleteTaskResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/tasks/{task_id}/complete"
+      body: "*"
+    };
+  }
+
+  // GetTasksByProject retrieves all tasks for a project (nested path params)
+  rpc GetTasksByProject(GetTasksByProjectRequest) returns (GetTasksByProjectResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/projects/{project_id}/tasks"
+    };
+  }
+
+  // AssignTask assigns a task to a user (multiple path params)
+  rpc AssignTask(AssignTaskRequest) returns (AssignTaskResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/projects/{project_id}/tasks/{task_id}/assign/{user_id}"
+      body: "*"
+    };
+  }
+}
+
+// Task represents a task entity
+message Task {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  TaskStatus status = 4;
+  string project_id = 5;
+  string assignee_id = 6;
+  int64 created_at = 7;
+  int64 updated_at = 8;
+}
+
+// TaskStatus represents the status of a task
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_PENDING = 1;
+  TASK_STATUS_IN_PROGRESS = 2;
+  TASK_STATUS_COMPLETED = 3;
+  TASK_STATUS_CANCELLED = 4;
+}
+
+// CreateTaskRequest is the request for CreateTask
+message CreateTaskRequest {
+  string title = 1;
+  string description = 2;
+  string project_id = 3;
+}
+
+// CreateTaskResponse is the response for CreateTask
+message CreateTaskResponse {
+  Task task = 1;
+}
+
+// GetTaskRequest is the request for GetTask
+message GetTaskRequest {
+  string task_id = 1;
+}
+
+// GetTaskResponse is the response for GetTask
+message GetTaskResponse {
+  Task task = 1;
+}
+
+// UpdateTaskRequest is the request for UpdateTask
+message UpdateTaskRequest {
+  string task_id = 1;
+  Task task = 2;
+}
+
+// UpdateTaskResponse is the response for UpdateTask
+message UpdateTaskResponse {
+  Task task = 1;
+}
+
+// DeleteTaskRequest is the request for DeleteTask
+message DeleteTaskRequest {
+  string task_id = 1;
+}
+
+// DeleteTaskResponse is the response for DeleteTask
+message DeleteTaskResponse {
+  bool success = 1;
+}
+
+// ListTasksRequest is the request for ListTasks
+message ListTasksRequest {
+  string project_id = 1;
+  TaskStatus status = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+// ListTasksResponse is the response for ListTasks
+message ListTasksResponse {
+  repeated Task tasks = 1;
+  string next_page_token = 2;
+}
+
+// CompleteTaskRequest is the request for CompleteTask
+message CompleteTaskRequest {
+  string task_id = 1;
+}
+
+// CompleteTaskResponse is the response for CompleteTask
+message CompleteTaskResponse {
+  Task task = 1;
+}
+
+// GetTasksByProjectRequest is the request for GetTasksByProject
+message GetTasksByProjectRequest {
+  string project_id = 1;
+}
+
+// GetTasksByProjectResponse is the response for GetTasksByProject
+message GetTasksByProjectResponse {
+  repeated Task tasks = 1;
+}
+
+// AssignTaskRequest is the request for AssignTask
+message AssignTaskRequest {
+  string project_id = 1;
+  string task_id = 2;
+  string user_id = 3;
+}
+
+// AssignTaskResponse is the response for AssignTask
+message AssignTaskResponse {
+  Task task = 1;
+}

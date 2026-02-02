@@ -1031,3 +1031,62 @@ func TestGenerateWithInvalidOptions(t *testing.T) {
 		t.Errorf("len(resp.File) = %d, want 0", len(resp.File))
 	}
 }
+
+// TestGenerateCodeMultipleBindingsNoDuplicates ensures methods with multiple HTTP bindings
+// don't generate duplicate function declarations
+func TestGenerateCodeMultipleBindingsNoDuplicates(t *testing.T) {
+	t.Parallel()
+	g := New()
+
+	// Create service data with a method that has multiple HTTP bindings
+	data := &ServiceData{
+		PackageName: "test",
+		Services: []ServiceInfo{
+			{
+				Name: "ResourceService",
+				Methods: []MethodInfo{
+					{
+						Name:       "UpdateResource",
+						InputType:  "UpdateResourceRequest",
+						OutputType: "Resource",
+						HTTPRules: []HTTPRule{
+							{Method: "PUT", Pattern: "/v1/resources/{id}", Body: "resource"},
+							{Method: "PATCH", Pattern: "/v1/resources/{id}", Body: "resource"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	code, err := g.GenerateCode(data)
+	if err != nil {
+		t.Fatalf("GenerateCode() error = %v", err)
+	}
+
+	// Count function declarations - should only appear once each
+	funcDeclarations := []string{
+		"func RegisterUpdateResourceRoute",
+		"func (g *RouteGroup) RegisterUpdateResource",
+	}
+
+	for _, funcDecl := range funcDeclarations {
+		count := strings.Count(code, funcDecl)
+		if count != 1 {
+			t.Errorf("Expected %q to appear exactly 1 time, got %d times", funcDecl, count)
+		}
+	}
+
+	// Verify both HTTP bindings are registered within the function
+	if !strings.Contains(code, `r.HandleFunc("PUT"`) {
+		t.Error("Missing PUT binding registration")
+	}
+	if !strings.Contains(code, `r.HandleFunc("PATCH"`) {
+		t.Error("Missing PATCH binding registration")
+	}
+
+	// Verify the comment mentions the number of bindings
+	if !strings.Contains(code, "2 binding(s)") {
+		t.Error("Missing binding count comment")
+	}
+}
