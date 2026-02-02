@@ -6,4 +6,3 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20250324211829-b45e905df463
 	google.golang.org/protobuf v1.36.8
 )
-

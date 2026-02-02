@@ -158,9 +158,9 @@ func (g *RouteGroup) HandleFunc(method, pattern string, handler http.HandlerFunc
 }
 
 func (g RouteGroup) GetRoutes() []string {
-	routes := make([]string, len(g.routes))
-	for i, route := range g.routes {
-		routes[i] = route.method + " " + route.pattern
+	routes := make([]string, 0, len(g.routes))
+	for _, route := range g.routes {
+		routes = append(routes, route.method+" "+route.pattern)
 	}
 	return routes
 }

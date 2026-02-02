@@ -35,6 +35,8 @@ type Generator struct {
 	PathParamExtractor PathParamExtractor
 	// PathPatternConverter converts path patterns
 	PathPatternConverter PathPatternConverter
+	// SupportsEditions indicates if this generator supports editions
+	SupportsEditions bool
 }
 
 // ServiceData contains the data for a service definition.
@@ -55,14 +57,6 @@ type MethodInfo struct {
 	InputType  string
 	OutputType string
 	HTTPRules  []HTTPRule
-}
-
-// HTTPRule represents an HTTP binding from annotations.
-type HTTPRule struct {
-	Method     string
-	Pattern    string
-	Body       string
-	PathParams []string
 }
 
 // New creates a new httpinterface generator with an optional custom HTTP rule extractor.
@@ -92,16 +86,18 @@ func New(httpExtractor ...HTTPRuleExtractor) *Generator {
 	}
 
 	return &Generator{
-		ParsedTemplates:        tmpl,
-		Options:               &Options{},
-		HTTPRuleExtractor:     extractor,
-		PathParamExtractor:    parsePathParams,
-		PathPatternConverter:  convertPathPattern,
+		ParsedTemplates:      tmpl,
+		Options:              &Options{},
+		HTTPRuleExtractor:    extractor,
+		PathParamExtractor:   parsePathParams,
+		PathPatternConverter: convertPathPattern,
+		SupportsEditions:     true,
 	}
 }
 
 // NewWith creates a new generator with all custom dependencies.
-func NewWith(httpExtractor HTTPRuleExtractor, pathExtractor PathParamExtractor, converter PathPatternConverter) *Generator {
+func NewWith(httpExtractor HTTPRuleExtractor, pathExtractor PathParamExtractor,
+	converter PathPatternConverter) *Generator {
 	// Parse the templates
 	tmpl := template.New("httpinterface").Funcs(template.FuncMap{
 		"lower": strings.ToLower,
@@ -120,11 +116,12 @@ func NewWith(httpExtractor HTTPRuleExtractor, pathExtractor PathParamExtractor, 
 	tmpl = template.Must(tmpl.New("service").Parse(serviceTemplate))
 
 	return &Generator{
-		ParsedTemplates:        tmpl,
-		Options:               &Options{},
-		HTTPRuleExtractor:     httpExtractor,
-		PathParamExtractor:    pathExtractor,
-		PathPatternConverter:  converter,
+		ParsedTemplates:      tmpl,
+		Options:              &Options{},
+		HTTPRuleExtractor:    httpExtractor,
+		PathParamExtractor:   pathExtractor,
+		PathPatternConverter: converter,
+		SupportsEditions:     true,
 	}
 }
 
@@ -132,14 +129,31 @@ func NewWith(httpExtractor HTTPRuleExtractor, pathExtractor PathParamExtractor, 
 func (g *Generator) Generate(req *plugin.CodeGeneratorRequest) *plugin.CodeGeneratorResponse {
 	resp := new(plugin.CodeGeneratorResponse)
 
-	// Declare support for protobuf 3 features
-	supportedFeatures := uint64(plugin.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
-	resp.SupportedFeatures = proto.Uint64(supportedFeatures)
-
-	// Parse options from parameter
+	// Parse options from parameter first
 	if err := g.parseAndSetOptions(req.GetParameter()); err != nil {
 		resp.Error = proto.String(fmt.Sprintf("invalid options: %v", err))
 		return resp
+	}
+
+	// Set SupportsEditions based on options
+	if g.Options != nil && g.Options.Editions {
+		g.SupportsEditions = true
+	}
+
+	// Declare support for protobuf features
+	supportedFeatures := uint64(plugin.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
+
+	// Add editions support if the generator supports it
+	if g.SupportsEditions {
+		supportedFeatures |= uint64(plugin.CodeGeneratorResponse_FEATURE_SUPPORTS_EDITIONS)
+	}
+
+	resp.SupportedFeatures = proto.Uint64(supportedFeatures)
+
+	// Set edition support range for editions
+	if g.SupportsEditions {
+		resp.MinimumEdition = proto.Int32(int32(descriptor.Edition_EDITION_PROTO3))
+		resp.MaximumEdition = proto.Int32(int32(descriptor.Edition_EDITION_2023))
 	}
 
 	// Process each proto file

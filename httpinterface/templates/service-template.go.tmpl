@@ -23,18 +23,19 @@ func (g *RouteGroup) Register{{ .Name }}Routes(handler {{ .Name }}Handler) {
 }
 
 {{- range $method := .Methods }}
-{{- range $method.HTTPRules }}
 // Register{{ $method.Name }}Route is a helper that registers the {{ $method.Name }} handler
+// This registers all HTTP bindings for this method ({{ len $method.HTTPRules }} binding(s))
 func Register{{ $method.Name }}Route(r Routes, handler {{ $.Name }}Handler, middlewares ...Middleware) {
 	if r == nil || handler == nil {
 		return
 	}
+{{- range $method.HTTPRules }}
     r.HandleFunc("{{ .Method }}", "{{ .Pattern }}", handler.Handle{{ $method.Name }}, middlewares...)
+{{- end }}
 }
 
 // Register{{ $method.Name }} is a method on RouteGroup to register the {{ $method.Name }} handler
 func (g *RouteGroup) Register{{ $method.Name }}(handler {{ $.Name }}Handler, middlewares ...Middleware) {
     Register{{ $method.Name }}Route(g, handler, middlewares...)
 }
-{{- end }}
 {{- end }}
