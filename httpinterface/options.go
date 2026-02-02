@@ -45,19 +45,19 @@ func parseParameter(options *Options, param string) error {
 
 	switch key {
 	case "paths":
-		return parsePathsOption(options, value)
+		return applyPathsOption(options, value)
 	case "output_prefix":
 		options.OutputPrefix = value
 		return nil
 	case "editions":
-		return parseEditionsOption(options, value)
+		return applyEditionsOption(options, value)
 	default:
 		return fmt.Errorf("unknown option: %s (valid options: paths, output_prefix, editions)", key)
 	}
 }
 
-// parsePathsOption parses the paths option
-func parsePathsOption(options *Options, value string) error {
+// applyPathsOption validates and applies the paths option value.
+func applyPathsOption(options *Options, value string) error {
 	switch value {
 	case "source_relative":
 		options.PathsSourceRelative = true
@@ -70,8 +70,8 @@ func parsePathsOption(options *Options, value string) error {
 	}
 }
 
-// parseEditionsOption parses the editions option
-func parseEditionsOption(options *Options, value string) error {
+// applyEditionsOption validates and applies the editions option value.
+func applyEditionsOption(options *Options, value string) error {
 	switch value {
 	case "true":
 		options.Editions = true
