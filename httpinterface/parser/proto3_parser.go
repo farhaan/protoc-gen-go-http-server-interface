@@ -24,8 +24,8 @@ func (p *Proto3Parser) ParseHTTPRules(method *descriptor.MethodDescriptorProto) 
 
 	if method.Options != nil {
 		v := proto.GetExtension(method.Options, options.E_Http)
-		httpRule := v.(*options.HttpRule)
-		if httpRule != nil {
+		httpRule, ok := v.(*options.HttpRule)
+		if ok && httpRule != nil {
 			// Add the main rule
 			rule := p.parseHTTPRule(httpRule)
 			if rule.Method != "" {
@@ -70,8 +70,10 @@ func (p *Proto3Parser) parseHTTPRule(httpRule *options.HttpRule) HTTPRule {
 		rule.Method = "PATCH"
 		rule.Pattern = pattern.Patch
 	case *options.HttpRule_Custom:
-		rule.Method = pattern.Custom.Kind
-		rule.Pattern = pattern.Custom.Path
+		if pattern.Custom != nil {
+			rule.Method = pattern.Custom.Kind
+			rule.Pattern = pattern.Custom.Path
+		}
 	}
 
 	rule.PathParams = p.ParsePathParams(rule.Pattern)

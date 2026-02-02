@@ -378,6 +378,20 @@ func TestParseHTTPRule_Legacy(t *testing.T) {
 				Body:    "*",
 			},
 		},
+		{
+			name: "custom_rule_nil_custom",
+			httpRule: &options.HttpRule{
+				Pattern: &options.HttpRule_Custom{
+					Custom: nil,
+				},
+				Body: "",
+			},
+			expected: HTTPRule{
+				Method:  "",
+				Pattern: "",
+				Body:    "",
+			},
+		},
 	}
 
 	for _, tt := range tests {

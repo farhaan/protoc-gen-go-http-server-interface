@@ -321,6 +321,21 @@ func TestEditionsParser_parseHTTPRule(t *testing.T) {
 				PathParams: []string{"id"},
 			},
 		},
+		{
+			name: "custom_rule_nil_custom",
+			httpRule: &options.HttpRule{
+				Pattern: &options.HttpRule_Custom{
+					Custom: nil,
+				},
+				Body: "",
+			},
+			expected: HTTPRule{
+				Method:     "",
+				Pattern:    "",
+				Body:       "",
+				PathParams: []string{},
+			},
+		},
 	}
 
 	for _, tt := range tests {
