@@ -9,10 +9,16 @@ on:
 env:
   GO_VERSION: '1.24'
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
 
@@ -31,6 +37,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
+          args: --timeout=5m
 
   unit-test:
     name: Unit Tests
@@ -138,7 +145,7 @@ jobs:
       - name: Regenerate examples
         run: |
           cd examples/editions/tasks && buf generate
-          cd ../proto3/products && buf generate
+          cd ../../proto3/products && buf generate
 
       - name: Check for changes
         run: |
