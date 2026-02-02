@@ -23,7 +23,7 @@ func FuzzParsePathParams(f *testing.F) {
 		"/path/with spaces/{param}",
 		"/path/with/special/chars!@#$%/{id}",
 		"/unicode/路径/{参数}",
-		strings.Repeat("/{x}", 100), // long pattern
+		strings.Repeat("/{x}", 100),                     // long pattern
 		"/v1/users/{" + strings.Repeat("a", 1000) + "}", // long param name
 	}
 
