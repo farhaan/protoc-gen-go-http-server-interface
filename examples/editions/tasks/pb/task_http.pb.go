@@ -190,15 +190,15 @@ func RegisterTaskServiceRoutes(r Routes, handler TaskServiceHandler) {
 	if r == nil || handler == nil {
 		return
 	}
-    r.HandleFunc("POST", "/api/v1/tasks", handler.HandleCreateTask)
-    r.HandleFunc("GET", "/api/v1/tasks/{task_id}", handler.HandleGetTask)
-    r.HandleFunc("PUT", "/api/v1/tasks/{task_id}", handler.HandleUpdateTask)
-    r.HandleFunc("PATCH", "/api/v1/tasks/{task_id}", handler.HandleUpdateTask)
-    r.HandleFunc("DELETE", "/api/v1/tasks/{task_id}", handler.HandleDeleteTask)
-    r.HandleFunc("GET", "/api/v1/tasks", handler.HandleListTasks)
-    r.HandleFunc("POST", "/api/v1/tasks/{task_id}/complete", handler.HandleCompleteTask)
-    r.HandleFunc("GET", "/api/v1/projects/{project_id}/tasks", handler.HandleGetTasksByProject)
-    r.HandleFunc("POST", "/api/v1/projects/{project_id}/tasks/{task_id}/assign/{user_id}", handler.HandleAssignTask)
+    r.HandleFunc(http.MethodPost, "/api/v1/tasks", handler.HandleCreateTask)
+    r.HandleFunc(http.MethodGet, "/api/v1/tasks/{task_id}", handler.HandleGetTask)
+    r.HandleFunc(http.MethodPut, "/api/v1/tasks/{task_id}", handler.HandleUpdateTask)
+    r.HandleFunc(http.MethodPatch, "/api/v1/tasks/{task_id}", handler.HandleUpdateTask)
+    r.HandleFunc(http.MethodDelete, "/api/v1/tasks/{task_id}", handler.HandleDeleteTask)
+    r.HandleFunc(http.MethodGet, "/api/v1/tasks", handler.HandleListTasks)
+    r.HandleFunc(http.MethodPost, "/api/v1/tasks/{task_id}/complete", handler.HandleCompleteTask)
+    r.HandleFunc(http.MethodGet, "/api/v1/projects/{project_id}/tasks", handler.HandleGetTasksByProject)
+    r.HandleFunc(http.MethodPost, "/api/v1/projects/{project_id}/tasks/{task_id}/assign/{user_id}", handler.HandleAssignTask)
 }
 
 // RegisterTaskServiceRoutes is a method on RouteGroup to register all TaskService routes
@@ -211,7 +211,7 @@ func RegisterCreateTaskRoute(r Routes, handler TaskServiceHandler, middlewares .
 	if r == nil || handler == nil {
 		return
 	}
-    r.HandleFunc("POST", "/api/v1/tasks", handler.HandleCreateTask, middlewares...)
+    r.HandleFunc(http.MethodPost, "/api/v1/tasks", handler.HandleCreateTask, middlewares...)
 }
 
 // RegisterCreateTask is a method on RouteGroup to register the CreateTask handler
@@ -224,7 +224,7 @@ func RegisterGetTaskRoute(r Routes, handler TaskServiceHandler, middlewares ...M
 	if r == nil || handler == nil {
 		return
 	}
-    r.HandleFunc("GET", "/api/v1/tasks/{task_id}", handler.HandleGetTask, middlewares...)
+    r.HandleFunc(http.MethodGet, "/api/v1/tasks/{task_id}", handler.HandleGetTask, middlewares...)
 }
 
 // RegisterGetTask is a method on RouteGroup to register the GetTask handler
@@ -237,8 +237,8 @@ func RegisterUpdateTaskRoute(r Routes, handler TaskServiceHandler, middlewares .
 	if r == nil || handler == nil {
 		return
 	}
-    r.HandleFunc("PUT", "/api/v1/tasks/{task_id}", handler.HandleUpdateTask, middlewares...)
-    r.HandleFunc("PATCH", "/api/v1/tasks/{task_id}", handler.HandleUpdateTask, middlewares...)
+    r.HandleFunc(http.MethodPut, "/api/v1/tasks/{task_id}", handler.HandleUpdateTask, middlewares...)
+    r.HandleFunc(http.MethodPatch, "/api/v1/tasks/{task_id}", handler.HandleUpdateTask, middlewares...)
 }
 
 // RegisterUpdateTask is a method on RouteGroup to register the UpdateTask handler
@@ -251,7 +251,7 @@ func RegisterDeleteTaskRoute(r Routes, handler TaskServiceHandler, middlewares .
 	if r == nil || handler == nil {
 		return
 	}
-    r.HandleFunc("DELETE", "/api/v1/tasks/{task_id}", handler.HandleDeleteTask, middlewares...)
+    r.HandleFunc(http.MethodDelete, "/api/v1/tasks/{task_id}", handler.HandleDeleteTask, middlewares...)
 }
 
 // RegisterDeleteTask is a method on RouteGroup to register the DeleteTask handler
@@ -264,7 +264,7 @@ func RegisterListTasksRoute(r Routes, handler TaskServiceHandler, middlewares ..
 	if r == nil || handler == nil {
 		return
 	}
-    r.HandleFunc("GET", "/api/v1/tasks", handler.HandleListTasks, middlewares...)
+    r.HandleFunc(http.MethodGet, "/api/v1/tasks", handler.HandleListTasks, middlewares...)
 }
 
 // RegisterListTasks is a method on RouteGroup to register the ListTasks handler
@@ -277,7 +277,7 @@ func RegisterCompleteTaskRoute(r Routes, handler TaskServiceHandler, middlewares
 	if r == nil || handler == nil {
 		return
 	}
-    r.HandleFunc("POST", "/api/v1/tasks/{task_id}/complete", handler.HandleCompleteTask, middlewares...)
+    r.HandleFunc(http.MethodPost, "/api/v1/tasks/{task_id}/complete", handler.HandleCompleteTask, middlewares...)
 }
 
 // RegisterCompleteTask is a method on RouteGroup to register the CompleteTask handler
@@ -290,7 +290,7 @@ func RegisterGetTasksByProjectRoute(r Routes, handler TaskServiceHandler, middle
 	if r == nil || handler == nil {
 		return
 	}
-    r.HandleFunc("GET", "/api/v1/projects/{project_id}/tasks", handler.HandleGetTasksByProject, middlewares...)
+    r.HandleFunc(http.MethodGet, "/api/v1/projects/{project_id}/tasks", handler.HandleGetTasksByProject, middlewares...)
 }
 
 // RegisterGetTasksByProject is a method on RouteGroup to register the GetTasksByProject handler
@@ -303,7 +303,7 @@ func RegisterAssignTaskRoute(r Routes, handler TaskServiceHandler, middlewares .
 	if r == nil || handler == nil {
 		return
 	}
-    r.HandleFunc("POST", "/api/v1/projects/{project_id}/tasks/{task_id}/assign/{user_id}", handler.HandleAssignTask, middlewares...)
+    r.HandleFunc(http.MethodPost, "/api/v1/projects/{project_id}/tasks/{task_id}/assign/{user_id}", handler.HandleAssignTask, middlewares...)
 }
 
 // RegisterAssignTask is a method on RouteGroup to register the AssignTask handler

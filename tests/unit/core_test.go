@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface"
+	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface/parser"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
@@ -26,7 +27,7 @@ func TestCore_BasicServiceGeneration(t *testing.T) {
 						Name:       "GetTest",
 						InputType:  "GetTestRequest",
 						OutputType: "TestResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{
 								Method:     "GET",
 								Pattern:    "/test/{id}",
@@ -39,7 +40,7 @@ func TestCore_BasicServiceGeneration(t *testing.T) {
 						Name:       "CreateTest",
 						InputType:  "CreateTestRequest",
 						OutputType: "TestResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{
 								Method:  "POST",
 								Pattern: "/test",
@@ -68,8 +69,8 @@ func TestCore_BasicServiceGeneration(t *testing.T) {
 		"HandleCreateTest(w http.ResponseWriter, r *http.Request)",
 		"type Routes interface",
 		"RegisterTestServiceRoutes",
-		`"GET", "/test/{id}"`,
-		`"POST", "/test"`,
+		`http.MethodGet, "/test/{id}"`,
+		`http.MethodPost, "/test"`,
 	}
 
 	for _, pattern := range expectedPatterns {
@@ -97,7 +98,7 @@ func TestCore_MultipleServices(t *testing.T) {
 				Methods: []httpinterface.MethodInfo{
 					{
 						Name: "GetUser",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "GET", Pattern: "/users/{id}", PathParams: []string{"id"}},
 						},
 					},
@@ -108,7 +109,7 @@ func TestCore_MultipleServices(t *testing.T) {
 				Methods: []httpinterface.MethodInfo{
 					{
 						Name: "GetOrder",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "GET", Pattern: "/orders/{id}", PathParams: []string{"id"}},
 						},
 					},
@@ -128,8 +129,8 @@ func TestCore_MultipleServices(t *testing.T) {
 		"type OrderServiceHandler interface",
 		"RegisterUserServiceRoutes",
 		"RegisterOrderServiceRoutes",
-		`"GET", "/users/{id}"`,
-		`"GET", "/orders/{id}"`,
+		`http.MethodGet, "/users/{id}"`,
+		`http.MethodGet, "/orders/{id}"`,
 	}
 
 	for _, pattern := range expectedServices {
@@ -152,19 +153,19 @@ func TestCore_HTTPMethods(t *testing.T) {
 				Methods: []httpinterface.MethodInfo{
 					{
 						Name: "GetResource",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "GET", Pattern: "/resources/{id}", PathParams: []string{"id"}},
 						},
 					},
 					{
 						Name: "CreateResource",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "POST", Pattern: "/resources", Body: "*"},
 						},
 					},
 					{
 						Name: "UpdateResource",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{
 								Method:     "PUT",
 								Pattern:    "/resources/{id}",
@@ -175,7 +176,7 @@ func TestCore_HTTPMethods(t *testing.T) {
 					},
 					{
 						Name: "PatchResource",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{
 								Method:     "PATCH",
 								Pattern:    "/resources/{id}",
@@ -186,7 +187,7 @@ func TestCore_HTTPMethods(t *testing.T) {
 					},
 					{
 						Name: "DeleteResource",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "DELETE", Pattern: "/resources/{id}", PathParams: []string{"id"}},
 						},
 					},
@@ -202,11 +203,11 @@ func TestCore_HTTPMethods(t *testing.T) {
 
 	// Verify all HTTP methods
 	expectedMethods := []string{
-		`"GET", "/resources/{id}"`,
-		`"POST", "/resources"`,
-		`"PUT", "/resources/{id}"`,
-		`"PATCH", "/resources/{id}"`,
-		`"DELETE", "/resources/{id}"`,
+		`http.MethodGet, "/resources/{id}"`,
+		`http.MethodPost, "/resources"`,
+		`http.MethodPut, "/resources/{id}"`,
+		`http.MethodPatch, "/resources/{id}"`,
+		`http.MethodDelete, "/resources/{id}"`,
 		"HandleGetResource",
 		"HandleCreateResource",
 		"HandleUpdateResource",
@@ -305,7 +306,7 @@ func TestCore_PackageHandling(t *testing.T) {
 						Methods: []httpinterface.MethodInfo{
 							{
 								Name: "TestMethod",
-								HTTPRules: []httpinterface.HTTPRule{
+								HTTPRules: []parser.HTTPRule{
 									{Method: "GET", Pattern: "/test"},
 								},
 							},

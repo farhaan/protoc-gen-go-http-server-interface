@@ -1,10 +1,12 @@
 package httpinterface
 
 import (
+	"net/http"
 	"strings"
 	"testing"
 	"text/template"
 
+	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface/parser"
 	"google.golang.org/protobuf/proto"
 	descriptor "google.golang.org/protobuf/types/descriptorpb"
 	plugin "google.golang.org/protobuf/types/pluginpb"
@@ -54,12 +56,12 @@ func TestShouldGenerate(t *testing.T) {
 }
 
 // Mock GetHTTPRules function for testing
-func mockGetHTTPRules(method *descriptor.MethodDescriptorProto) []HTTPRule {
+func mockGetHTTPRules(method *descriptor.MethodDescriptorProto) []parser.HTTPRule {
 	// For test purposes, if the method name contains "HTTP", return a rule
 	if strings.Contains(method.GetName(), "HTTP") {
-		return []HTTPRule{
+		return []parser.HTTPRule{
 			{
-				Method:  "GET",
+				Method:  http.MethodGet,
 				Pattern: "/api/{id}",
 				Body:    "",
 			},
@@ -215,7 +217,7 @@ func TestGenerateCode(t *testing.T) {
 						Name:       "GetItem",
 						InputType:  "GetItemRequest",
 						OutputType: "GetItemResponse",
-						HTTPRules: []HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{
 								Method:     "GET",
 								Pattern:    "/items/:id",
@@ -585,7 +587,7 @@ func TestGenerate(t *testing.T) {
 func TestGenerateNoHTTPRules(t *testing.T) {
 	t.Parallel()
 	// Mock function that returns no HTTP rules
-	noHTTPRulesExtractor := func(method *descriptor.MethodDescriptorProto) []HTTPRule { return nil }
+	noHTTPRulesExtractor := func(method *descriptor.MethodDescriptorProto) []parser.HTTPRule { return nil }
 	g := New(noHTTPRulesExtractor)
 
 	req := &plugin.CodeGeneratorRequest{
@@ -677,7 +679,7 @@ func TestBuildServiceDataWithOptions(t *testing.T) {
 }
 
 // Mock implementation of HTTP-related functions
-// var GetHTTPRules = func(method *descriptor.MethodDescriptorProto) []HTTPRule { return nil }
+// var GetHTTPRules = func(method *descriptor.MethodDescriptorProto) []parser.HTTPRule { return nil }
 // var GetPathParams = func(pattern string) []string { return nil }
 // var ConvertPathPattern = func(pattern string) string { return pattern }
 
@@ -696,7 +698,7 @@ func TestTemplateExecution(t *testing.T) {
 						Name:       "Echo",
 						InputType:  "EchoRequest",
 						OutputType: "EchoResponse",
-						HTTPRules: []HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{
 								Method:     "POST",
 								Pattern:    "/v1/echo",
@@ -1050,7 +1052,7 @@ func TestGenerateCodeMultipleBindingsNoDuplicates(t *testing.T) {
 						Name:       "UpdateResource",
 						InputType:  "UpdateResourceRequest",
 						OutputType: "Resource",
-						HTTPRules: []HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "PUT", Pattern: "/v1/resources/{id}", Body: "resource"},
 							{Method: "PATCH", Pattern: "/v1/resources/{id}", Body: "resource"},
 						},
@@ -1079,10 +1081,10 @@ func TestGenerateCodeMultipleBindingsNoDuplicates(t *testing.T) {
 	}
 
 	// Verify both HTTP bindings are registered within the function
-	if !strings.Contains(code, `r.HandleFunc("PUT"`) {
+	if !strings.Contains(code, `r.HandleFunc(http.MethodPut`) {
 		t.Error("Missing PUT binding registration")
 	}
-	if !strings.Contains(code, `r.HandleFunc("PATCH"`) {
+	if !strings.Contains(code, `r.HandleFunc(http.MethodPatch`) {
 		t.Error("Missing PATCH binding registration")
 	}
 
@@ -1108,7 +1110,7 @@ func TestCustomHTTPPatternNilSafety(t *testing.T) {
 						Name:       "CustomMethod",
 						InputType:  "CustomRequest",
 						OutputType: "CustomResponse",
-						HTTPRules: []HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "HEAD", Pattern: "/v1/health", Body: ""},
 						},
 					},
@@ -1122,7 +1124,7 @@ func TestCustomHTTPPatternNilSafety(t *testing.T) {
 		t.Fatalf("GenerateCode() with custom method error = %v", err)
 	}
 
-	if !strings.Contains(code, `r.HandleFunc("HEAD"`) {
+	if !strings.Contains(code, `r.HandleFunc(http.MethodHead`) {
 		t.Error("Missing HEAD method registration")
 	}
 
@@ -1137,7 +1139,7 @@ func TestCustomHTTPPatternNilSafety(t *testing.T) {
 						Name:       "EmptyMethod",
 						InputType:  "EmptyRequest",
 						OutputType: "EmptyResponse",
-						HTTPRules: []HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "", Pattern: "", Body: ""},
 						},
 					},

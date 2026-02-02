@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface"
+	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface/parser"
 )
 
 // TestPerformance_LargeConcurrentGeneration tests performance with multiple generators
@@ -22,7 +23,7 @@ func TestPerformance_LargeConcurrentGeneration(t *testing.T) {
 			Name:       "Method" + string(rune(i+65)), // MethodA, MethodB, etc.
 			InputType:  "Request" + string(rune(i+65)),
 			OutputType: "Response" + string(rune(i+65)),
-			HTTPRules: []httpinterface.HTTPRule{
+			HTTPRules: []parser.HTTPRule{
 				{
 					Method:     "GET",
 					Pattern:    "/api/v1/resource" + string(rune(i+65)) + "/{id}",
@@ -89,7 +90,7 @@ func TestCodeGeneration_SpecialCharacters(t *testing.T) {
 						Name:       "GetWithUnicode",
 						InputType:  "UnicodeRequest",
 						OutputType: "UnicodeResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{
 								Method:     "GET",
 								Pattern:    "/api/🚀/resources/{id}",
@@ -102,7 +103,7 @@ func TestCodeGeneration_SpecialCharacters(t *testing.T) {
 						Name:       "GetWithSpecialChars",
 						InputType:  "SpecialRequest",
 						OutputType: "SpecialResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{
 								Method:     "GET",
 								Pattern:    "/api/v1/special-chars_123/{resource-id}",
@@ -151,7 +152,7 @@ func TestEdgeCases_HTTPMethodVariations(t *testing.T) {
 						Name:       "HandleHead",
 						InputType:  "HeadRequest",
 						OutputType: "HeadResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "HEAD", Pattern: "/resources/{id}", Body: "", PathParams: []string{"id"}},
 						},
 					},
@@ -159,7 +160,7 @@ func TestEdgeCases_HTTPMethodVariations(t *testing.T) {
 						Name:       "HandleOptions",
 						InputType:  "OptionsRequest",
 						OutputType: "OptionsResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "OPTIONS", Pattern: "/resources", Body: ""},
 						},
 					},
@@ -167,7 +168,7 @@ func TestEdgeCases_HTTPMethodVariations(t *testing.T) {
 						Name:       "HandleTrace",
 						InputType:  "TraceRequest",
 						OutputType: "TraceResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "TRACE", Pattern: "/resources/{id}", Body: "", PathParams: []string{"id"}},
 						},
 					},
@@ -183,9 +184,9 @@ func TestEdgeCases_HTTPMethodVariations(t *testing.T) {
 
 	// Verify all HTTP methods are handled correctly
 	expectedMethods := []string{
-		`"HEAD", "/resources/{id}"`,
-		`"OPTIONS", "/resources"`,
-		`"TRACE", "/resources/{id}"`,
+		`http.MethodHead, "/resources/{id}"`,
+		`http.MethodOptions, "/resources"`,
+		`http.MethodTrace, "/resources/{id}"`,
 	}
 
 	for _, method := range expectedMethods {

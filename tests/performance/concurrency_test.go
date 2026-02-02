@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface"
+	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface/parser"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
@@ -29,7 +30,7 @@ func TestConcurrency_GeneratorThreadSafety(t *testing.T) {
 						Name:       "GetResource",
 						InputType:  "GetResourceRequest",
 						OutputType: "Resource",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "GET", Pattern: "/resources/{id}", Body: "", PathParams: []string{"id"}},
 						},
 					},
@@ -37,7 +38,7 @@ func TestConcurrency_GeneratorThreadSafety(t *testing.T) {
 						Name:       "CreateResource",
 						InputType:  "CreateResourceRequest",
 						OutputType: "Resource",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "POST", Pattern: "/resources", Body: "*"},
 						},
 					},
@@ -132,7 +133,7 @@ func TestConcurrency_SharedGeneratorState(t *testing.T) {
 							Name:       fmt.Sprintf("GetResource%d", id),
 							InputType:  fmt.Sprintf("GetRequest%d", id),
 							OutputType: fmt.Sprintf("Response%d", id),
-							HTTPRules: []httpinterface.HTTPRule{
+							HTTPRules: []parser.HTTPRule{
 								{Method: "GET", Pattern: fmt.Sprintf("/service%d/resources/{id}", id),
 									Body: "", PathParams: []string{"id"}},
 							},
@@ -304,7 +305,7 @@ func TestConcurrency_RaceConditionDetection(t *testing.T) {
 				{
 					Name: "RaceService1",
 					Methods: []httpinterface.MethodInfo{
-						{Name: "Method1", HTTPRules: []httpinterface.HTTPRule{{Method: "GET", Pattern: "/path1"}}},
+						{Name: "Method1", HTTPRules: []parser.HTTPRule{{Method: "GET", Pattern: "/path1"}}},
 					},
 				},
 			},
@@ -315,7 +316,7 @@ func TestConcurrency_RaceConditionDetection(t *testing.T) {
 				{
 					Name: "RaceService2",
 					Methods: []httpinterface.MethodInfo{
-						{Name: "Method2", HTTPRules: []httpinterface.HTTPRule{{Method: "POST", Pattern: "/path2", Body: "*"}}},
+						{Name: "Method2", HTTPRules: []parser.HTTPRule{{Method: "POST", Pattern: "/path2", Body: "*"}}},
 					},
 				},
 			},
@@ -328,7 +329,7 @@ func TestConcurrency_RaceConditionDetection(t *testing.T) {
 					Methods: []httpinterface.MethodInfo{
 						{
 							Name: "Method3",
-							HTTPRules: []httpinterface.HTTPRule{
+							HTTPRules: []parser.HTTPRule{
 								{Method: "PUT", Pattern: "/path3/{id}", PathParams: []string{"id"}},
 							},
 						},
@@ -391,7 +392,7 @@ func TestConcurrency_MemoryConsistency(t *testing.T) {
 				Methods: []httpinterface.MethodInfo{
 					{
 						Name:      "TestMethod",
-						HTTPRules: []httpinterface.HTTPRule{{Method: "GET", Pattern: "/test"}},
+						HTTPRules: []parser.HTTPRule{{Method: "GET", Pattern: "/test"}},
 					},
 				},
 			},
@@ -446,7 +447,7 @@ func TestConcurrency_DeadlockDetection(t *testing.T) {
 				Methods: []httpinterface.MethodInfo{
 					{
 						Name:      "TestMethod",
-						HTTPRules: []httpinterface.HTTPRule{{Method: "GET", Pattern: "/test"}},
+						HTTPRules: []parser.HTTPRule{{Method: "GET", Pattern: "/test"}},
 					},
 				},
 			},

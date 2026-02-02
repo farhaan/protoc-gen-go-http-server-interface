@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface/parser"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
@@ -117,21 +118,21 @@ func TestHTTPMethodSupport(t *testing.T) {
 	t.Parallel()
 
 	// Mock function that returns different HTTP methods
-	httpRuleExtractor := func(method *descriptorpb.MethodDescriptorProto) []HTTPRule {
+	httpRuleExtractor := func(method *descriptorpb.MethodDescriptorProto) []parser.HTTPRule {
 		methodName := method.GetName()
 		switch methodName {
 		case "GetMethod":
-			return []HTTPRule{{Method: "GET", Pattern: "/api/get", Body: ""}}
+			return []parser.HTTPRule{{Method: "GET", Pattern: "/api/get", Body: ""}}
 		case "PostMethod":
-			return []HTTPRule{{Method: "POST", Pattern: "/api/post", Body: "*"}}
+			return []parser.HTTPRule{{Method: "POST", Pattern: "/api/post", Body: "*"}}
 		case "PutMethod":
-			return []HTTPRule{{Method: "PUT", Pattern: "/api/put", Body: "*"}}
+			return []parser.HTTPRule{{Method: "PUT", Pattern: "/api/put", Body: "*"}}
 		case "DeleteMethod":
-			return []HTTPRule{{Method: "DELETE", Pattern: "/api/delete", Body: ""}}
+			return []parser.HTTPRule{{Method: "DELETE", Pattern: "/api/delete", Body: ""}}
 		case "PatchMethod":
-			return []HTTPRule{{Method: "PATCH", Pattern: "/api/patch", Body: "*"}}
+			return []parser.HTTPRule{{Method: "PATCH", Pattern: "/api/patch", Body: "*"}}
 		case "CustomMethod":
-			return []HTTPRule{{Method: "OPTIONS", Pattern: "/api/custom", Body: ""}}
+			return []parser.HTTPRule{{Method: "OPTIONS", Pattern: "/api/custom", Body: ""}}
 		}
 		return nil
 	}
@@ -248,7 +249,7 @@ func TestGeneratedCodePatterns(t *testing.T) {
 						Name:       "GetUser",
 						InputType:  "GetUserRequest",
 						OutputType: "User",
-						HTTPRules: []HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{
 								Method:     "GET",
 								Pattern:    "/users/:id",
@@ -261,7 +262,7 @@ func TestGeneratedCodePatterns(t *testing.T) {
 						Name:       "CreateUser",
 						InputType:  "CreateUserRequest",
 						OutputType: "User",
-						HTTPRules: []HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{
 								Method:     "POST",
 								Pattern:    "/users",
@@ -303,8 +304,8 @@ func TestGeneratedCodePatterns(t *testing.T) {
 		"func (g *RouteGroup) RegisterCreateUser",
 
 		// HTTP method handling
-		"GET",
-		"POST",
+		"http.MethodGet",
+		"http.MethodPost",
 
 		// Path patterns
 		"/users",

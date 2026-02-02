@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface"
+	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface/parser"
 )
 
 // TestGenerator_BasicServiceGeneration tests basic service generation functionality
@@ -22,7 +23,7 @@ func TestGenerator_BasicServiceGeneration(t *testing.T) {
 						Name:       "GetTest",
 						InputType:  "GetTestRequest",
 						OutputType: "TestResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{
 								Method:     "GET",
 								Pattern:    "/test/{id}",
@@ -47,7 +48,7 @@ func TestGenerator_BasicServiceGeneration(t *testing.T) {
 		"type TestServiceHandler interface",
 		"HandleGetTest(w http.ResponseWriter, r *http.Request)",
 		"RegisterTestServiceRoutes",
-		`"GET", "/test/{id}"`,
+		`http.MethodGet, "/test/{id}"`,
 	}
 
 	for _, pattern := range expectedPatterns {
@@ -72,7 +73,7 @@ func TestGenerator_MultipleHTTPMethods(t *testing.T) {
 						Name:       "GetResource",
 						InputType:  "GetResourceRequest",
 						OutputType: "Resource",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "GET", Pattern: "/resources/{id}", PathParams: []string{"id"}},
 						},
 					},
@@ -80,7 +81,7 @@ func TestGenerator_MultipleHTTPMethods(t *testing.T) {
 						Name:       "CreateResource",
 						InputType:  "CreateResourceRequest",
 						OutputType: "Resource",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "POST", Pattern: "/resources", Body: "*"},
 						},
 					},
@@ -88,7 +89,7 @@ func TestGenerator_MultipleHTTPMethods(t *testing.T) {
 						Name:       "UpdateResource",
 						InputType:  "UpdateResourceRequest",
 						OutputType: "Resource",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "PUT", Pattern: "/resources/{id}", Body: "*", PathParams: []string{"id"}},
 						},
 					},
@@ -96,7 +97,7 @@ func TestGenerator_MultipleHTTPMethods(t *testing.T) {
 						Name:       "PatchResource",
 						InputType:  "PatchResourceRequest",
 						OutputType: "Resource",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "PATCH", Pattern: "/resources/{id}", Body: "patch", PathParams: []string{"id"}},
 						},
 					},
@@ -104,7 +105,7 @@ func TestGenerator_MultipleHTTPMethods(t *testing.T) {
 						Name:       "DeleteResource",
 						InputType:  "DeleteResourceRequest",
 						OutputType: "DeleteResourceResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "DELETE", Pattern: "/resources/{id}", PathParams: []string{"id"}},
 						},
 					},
@@ -120,11 +121,11 @@ func TestGenerator_MultipleHTTPMethods(t *testing.T) {
 
 	// Verify all HTTP methods are generated
 	expectedMethods := []string{
-		`"GET", "/resources/{id}"`,
-		`"POST", "/resources"`,
-		`"PUT", "/resources/{id}"`,
-		`"PATCH", "/resources/{id}"`,
-		`"DELETE", "/resources/{id}"`,
+		`http.MethodGet, "/resources/{id}"`,
+		`http.MethodPost, "/resources"`,
+		`http.MethodPut, "/resources/{id}"`,
+		`http.MethodPatch, "/resources/{id}"`,
+		`http.MethodDelete, "/resources/{id}"`,
 	}
 
 	for _, method := range expectedMethods {
@@ -147,7 +148,7 @@ func TestGenerator_MultipleServices(t *testing.T) {
 				Methods: []httpinterface.MethodInfo{
 					{
 						Name: "GetUser",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "GET", Pattern: "/users/{id}", PathParams: []string{"id"}},
 						},
 					},
@@ -158,7 +159,7 @@ func TestGenerator_MultipleServices(t *testing.T) {
 				Methods: []httpinterface.MethodInfo{
 					{
 						Name: "GetOrder",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "GET", Pattern: "/orders/{id}", PathParams: []string{"id"}},
 						},
 					},
@@ -233,7 +234,7 @@ func TestGenerator_ComplexPathParameters(t *testing.T) {
 								Name:       "TestMethod",
 								InputType:  "TestRequest",
 								OutputType: "TestResponse",
-								HTTPRules: []httpinterface.HTTPRule{
+								HTTPRules: []parser.HTTPRule{
 									{
 										Method:     "GET",
 										Pattern:    tc.pattern,

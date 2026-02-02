@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface"
+	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface/parser"
 )
 
 // TestSecurity_MaliciousInputs tests handling of potentially malicious proto patterns
@@ -29,7 +30,7 @@ func TestSecurity_MaliciousInputs(t *testing.T) {
 								Name:       "TestMethod",
 								InputType:  "TestRequest",
 								OutputType: "TestResponse",
-								HTTPRules: []httpinterface.HTTPRule{
+								HTTPRules: []parser.HTTPRule{
 									{Method: "GET", Pattern: "/test", Body: ""},
 								},
 							},
@@ -51,7 +52,7 @@ func TestSecurity_MaliciousInputs(t *testing.T) {
 								Name:       "TestMethod",
 								InputType:  "TestRequest",
 								OutputType: "TestResponse",
-								HTTPRules: []httpinterface.HTTPRule{
+								HTTPRules: []parser.HTTPRule{
 									{
 										Method:     "GET",
 										Pattern:    "/a/{a.b.c.d.e.f.g.h.i.j.k.l.m.n.o.p.q.r.s.t.u.v.w.x.y.z}",
@@ -78,7 +79,7 @@ func TestSecurity_MaliciousInputs(t *testing.T) {
 								Name:       "TestMethod",
 								InputType:  "TestRequest",
 								OutputType: "TestResponse",
-								HTTPRules: []httpinterface.HTTPRule{
+								HTTPRules: []parser.HTTPRule{
 									{
 										Method:     "GET",
 										Pattern:    "/test/{id}/../../../etc/passwd",

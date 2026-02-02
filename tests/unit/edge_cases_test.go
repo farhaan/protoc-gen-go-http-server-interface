@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface"
+	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface/parser"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
@@ -26,7 +27,7 @@ func TestAdvancedEdgeCases_HTTPBodyVariations(t *testing.T) {
 						Name:       "CreateWithFullBody",
 						InputType:  "CreateRequest",
 						OutputType: "Response",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "POST", Pattern: "/items", Body: "*"},
 						},
 					},
@@ -34,7 +35,7 @@ func TestAdvancedEdgeCases_HTTPBodyVariations(t *testing.T) {
 						Name:       "UpdateWithFieldBody",
 						InputType:  "UpdateRequest",
 						OutputType: "Response",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "PATCH", Pattern: "/items/{id}", Body: "item", PathParams: []string{"id"}},
 						},
 					},
@@ -42,7 +43,7 @@ func TestAdvancedEdgeCases_HTTPBodyVariations(t *testing.T) {
 						Name:       "UpdateWithNestedBody",
 						InputType:  "UpdateNestedRequest",
 						OutputType: "Response",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "PUT", Pattern: "/items/{id}", Body: "item.data", PathParams: []string{"id"}},
 						},
 					},
@@ -50,7 +51,7 @@ func TestAdvancedEdgeCases_HTTPBodyVariations(t *testing.T) {
 						Name:       "GetWithEmptyBody",
 						InputType:  "GetRequest",
 						OutputType: "Response",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "GET", Pattern: "/items/{id}", Body: "", PathParams: []string{"id"}},
 						},
 					},
@@ -72,10 +73,10 @@ func TestAdvancedEdgeCases_HTTPBodyVariations(t *testing.T) {
 		"HandleUpdateWithFieldBody",
 		"HandleUpdateWithNestedBody",
 		"HandleGetWithEmptyBody",
-		`"POST", "/items"`,
-		`"PATCH", "/items/{id}"`,
-		`"PUT", "/items/{id}"`,
-		`"GET", "/items/{id}"`,
+		`http.MethodPost, "/items"`,
+		`http.MethodPatch, "/items/{id}"`,
+		`http.MethodPut, "/items/{id}"`,
+		`http.MethodGet, "/items/{id}"`,
 	}
 
 	for _, pattern := range expectedPatterns {
@@ -136,7 +137,7 @@ func TestAdvancedEdgeCases_ComplexPathPatterns(t *testing.T) {
 								Name:       "TestMethod",
 								InputType:  "TestRequest",
 								OutputType: "TestResponse",
-								HTTPRules: []httpinterface.HTTPRule{
+								HTTPRules: []parser.HTTPRule{
 									{
 										Method:     "GET",
 										Pattern:    tc.pattern,
@@ -258,7 +259,7 @@ func TestAdvancedEdgeCases_LargeServiceFiles(t *testing.T) {
 			Name:       fmt.Sprintf("Method%d", i),
 			InputType:  fmt.Sprintf("Request%d", i),
 			OutputType: fmt.Sprintf("Response%d", i),
-			HTTPRules: []httpinterface.HTTPRule{
+			HTTPRules: []parser.HTTPRule{
 				{
 					Method:     "GET",
 					Pattern:    fmt.Sprintf("/api/v1/resource%d/{id}", i),
@@ -359,7 +360,7 @@ func TestAdvancedEdgeCases_EmptyServiceHandling(t *testing.T) {
 						Methods: []httpinterface.MethodInfo{
 							{
 								Name:      "MethodWithoutHTTP",
-								HTTPRules: []httpinterface.HTTPRule{},
+								HTTPRules: []parser.HTTPRule{},
 							},
 						},
 					},

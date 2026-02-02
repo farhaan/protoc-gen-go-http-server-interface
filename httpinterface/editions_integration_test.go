@@ -1,6 +1,7 @@
 package httpinterface
 
 import (
+	"net/http"
 	"strings"
 	"testing"
 
@@ -284,8 +285,8 @@ func TestEditionsFileDetection(t *testing.T) {
 				return
 			}
 
-			if rules[0].Method != "GET" {
-				t.Errorf("rules[0].Method = %q, want %q", rules[0].Method, "GET")
+			if rules[0].Method != http.MethodGet {
+				t.Errorf("rules[0].Method = %q, want %q", rules[0].Method, http.MethodGet)
 			}
 
 			if rules[0].Pattern != "/v1/test/{id}" {
@@ -447,10 +448,10 @@ func TestCompleteEditionsWorkflow(t *testing.T) {
 		"HandleGetUser(w http.ResponseWriter, r *http.Request)",
 		"HandleCreateUser(w http.ResponseWriter, r *http.Request)",
 		"HandleUpdateUser(w http.ResponseWriter, r *http.Request)",
-		`r.HandleFunc("GET", "/v1/users/{id}", handler.HandleGetUser)`,
-		`r.HandleFunc("POST", "/v1/users", handler.HandleCreateUser)`,
-		`r.HandleFunc("PUT", "/v1/users/{user_id}", handler.HandleUpdateUser)`,
-		`r.HandleFunc("PATCH", "/v1/users/{user_id}", handler.HandleUpdateUser)`,
+		`r.HandleFunc(http.MethodGet, "/v1/users/{id}", handler.HandleGetUser)`,
+		`r.HandleFunc(http.MethodPost, "/v1/users", handler.HandleCreateUser)`,
+		`r.HandleFunc(http.MethodPut, "/v1/users/{user_id}", handler.HandleUpdateUser)`,
+		`r.HandleFunc(http.MethodPatch, "/v1/users/{user_id}", handler.HandleUpdateUser)`,
 		`r.HandleFunc("MERGE", "/v1/users/{user_id}/merge", handler.HandleUpdateUser)`,
 	}
 

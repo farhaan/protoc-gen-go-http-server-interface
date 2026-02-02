@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface/parser"
 	options "google.golang.org/genproto/googleapis/api/annotations"
 	"google.golang.org/protobuf/proto"
 	descriptor "google.golang.org/protobuf/types/descriptorpb"
@@ -16,7 +17,7 @@ func TestCreateHTTPRuleExtractorForFile(t *testing.T) {
 		name     string
 		file     *descriptor.FileDescriptorProto
 		method   *descriptor.MethodDescriptorProto
-		expected []HTTPRule
+		expected []parser.HTTPRule
 	}{
 		{
 			name: "proto3_file_with_http_rule",
@@ -39,7 +40,7 @@ func TestCreateHTTPRuleExtractorForFile(t *testing.T) {
 				proto.SetExtension(method.Options, options.E_Http, httpRule)
 				return method
 			}(),
-			expected: []HTTPRule{
+			expected: []parser.HTTPRule{
 				{
 					Method:     "GET",
 					Pattern:    "/v1/users/{id}",
@@ -80,7 +81,7 @@ func TestCreateHTTPRuleExtractorForFile(t *testing.T) {
 				proto.SetExtension(method.Options, options.E_Http, httpRule)
 				return method
 			}(),
-			expected: []HTTPRule{
+			expected: []parser.HTTPRule{
 				{
 					Method:     "PUT",
 					Pattern:    "/v1/users/{user_id}",
@@ -97,7 +98,7 @@ func TestCreateHTTPRuleExtractorForFile(t *testing.T) {
 			method: &descriptor.MethodDescriptorProto{
 				Name: proto.String("TestMethod"),
 			},
-			expected: []HTTPRule{},
+			expected: []parser.HTTPRule{},
 		},
 	}
 
@@ -234,7 +235,7 @@ func TestParseMethodHTTPRules_Legacy(t *testing.T) {
 	tests := []struct {
 		name     string
 		method   *descriptor.MethodDescriptorProto
-		expected []HTTPRule
+		expected []parser.HTTPRule
 	}{
 		{
 			name: "method_with_get_rule",
@@ -254,7 +255,7 @@ func TestParseMethodHTTPRules_Legacy(t *testing.T) {
 				proto.SetExtension(method.Options, options.E_Http, httpRule)
 				return method
 			}(),
-			expected: []HTTPRule{
+			expected: []parser.HTTPRule{
 				{
 					Method:     "GET",
 					Pattern:    "/v1/users/{id}",
@@ -289,7 +290,7 @@ func TestParseMethodHTTPRules_Legacy(t *testing.T) {
 				proto.SetExtension(method.Options, options.E_Http, httpRule)
 				return method
 			}(),
-			expected: []HTTPRule{
+			expected: []parser.HTTPRule{
 				{
 					Method:     "POST",
 					Pattern:    "/v1/users",
@@ -309,7 +310,7 @@ func TestParseMethodHTTPRules_Legacy(t *testing.T) {
 			method: &descriptor.MethodDescriptorProto{
 				Name: proto.String("NoHTTP"),
 			},
-			expected: []HTTPRule{},
+			expected: []parser.HTTPRule{},
 		},
 	}
 
@@ -331,7 +332,7 @@ func TestParseHTTPRule_Legacy(t *testing.T) {
 	tests := []struct {
 		name     string
 		httpRule *options.HttpRule
-		expected HTTPRule
+		expected parser.HTTPRule
 	}{
 		{
 			name: "get_rule",
@@ -341,7 +342,7 @@ func TestParseHTTPRule_Legacy(t *testing.T) {
 				},
 				Body: "",
 			},
-			expected: HTTPRule{
+			expected: parser.HTTPRule{
 				Method:  "GET",
 				Pattern: "/v1/users/{id}",
 				Body:    "",
@@ -355,7 +356,7 @@ func TestParseHTTPRule_Legacy(t *testing.T) {
 				},
 				Body: "user",
 			},
-			expected: HTTPRule{
+			expected: parser.HTTPRule{
 				Method:  "POST",
 				Pattern: "/v1/users",
 				Body:    "user",
@@ -372,7 +373,7 @@ func TestParseHTTPRule_Legacy(t *testing.T) {
 				},
 				Body: "*",
 			},
-			expected: HTTPRule{
+			expected: parser.HTTPRule{
 				Method:  "SEARCH",
 				Pattern: "/v1/search/{query}",
 				Body:    "*",
@@ -386,7 +387,7 @@ func TestParseHTTPRule_Legacy(t *testing.T) {
 				},
 				Body: "",
 			},
-			expected: HTTPRule{
+			expected: parser.HTTPRule{
 				Method:  "",
 				Pattern: "",
 				Body:    "",
@@ -397,10 +398,10 @@ func TestParseHTTPRule_Legacy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result := parseHTTPRule(tt.httpRule)
+			result := parser.ExtractHTTPRule(tt.httpRule)
 
 			if result.Method != tt.expected.Method || result.Pattern != tt.expected.Pattern || result.Body != tt.expected.Body {
-				t.Errorf("parseHTTPRule() = %+v, want %+v", result, tt.expected)
+				t.Errorf("ExtractHTTPRule() = %+v, want %+v", result, tt.expected)
 			}
 		})
 	}
@@ -439,10 +440,10 @@ func TestParsePathParams_Legacy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result := parsePathParams(tt.pattern)
+			result := parser.PathParams(tt.pattern)
 
 			if !reflect.DeepEqual(result, tt.expected) {
-				t.Errorf("parsePathParams(%q) = %v, want %v", tt.pattern, result, tt.expected)
+				t.Errorf("PathParams(%q) = %v, want %v", tt.pattern, result, tt.expected)
 			}
 		})
 	}
