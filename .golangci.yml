@@ -1,4 +1,6 @@
 linters-settings:
+  gocyclo:
+    min-complexity: 22
   depguard:
     rules:
       Main:
@@ -32,9 +34,6 @@ linters:
     - lll
     - testpackage
     - gocyclo
-  settings:
-    gocyclo:
-      min-complexity: 22
 
 issues:
   exclude-dirs:
