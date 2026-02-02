@@ -24,8 +24,8 @@ var (
 	serviceTemplate string
 )
 
-// httpMethodConstant converts HTTP method strings to net/http constants
-func httpMethodConstant(method string) string {
+// toHTTPMethodConstant converts an HTTP method string to a net/http constant name.
+func toHTTPMethodConstant(method string) string {
 	switch method {
 	case "GET":
 		return "http.MethodGet"
@@ -88,7 +88,7 @@ type MethodInfo struct {
 }
 
 // New creates a new httpinterface generator with an optional custom HTTP rule extractor.
-// If no extractor is provided, uses the default parseMethodHTTPRules.
+// If no extractor is provided, uses the default extractHTTPRules.
 func New(httpExtractor ...HTTPRuleExtractor) *Generator {
 	// Parse the templates
 	tmpl := template.New("httpinterface").Funcs(template.FuncMap{
@@ -99,7 +99,7 @@ func New(httpExtractor ...HTTPRuleExtractor) *Generator {
 			}
 			return strings.ToUpper(s[:1]) + s[1:]
 		},
-		"httpMethod": httpMethodConstant,
+		"httpMethod": toHTTPMethodConstant,
 	})
 
 	// Parse header template
@@ -109,7 +109,7 @@ func New(httpExtractor ...HTTPRuleExtractor) *Generator {
 	tmpl = template.Must(tmpl.New("service").Parse(serviceTemplate))
 
 	// Set up defaults
-	var extractor HTTPRuleExtractor = parseMethodHTTPRules
+	var extractor HTTPRuleExtractor = extractHTTPRules
 	if len(httpExtractor) > 0 {
 		extractor = httpExtractor[0]
 	}
@@ -118,7 +118,7 @@ func New(httpExtractor ...HTTPRuleExtractor) *Generator {
 		ParsedTemplates:      tmpl,
 		Options:              &Options{},
 		HTTPRuleExtractor:    extractor,
-		PathParamExtractor:   parsePathParams,
+		PathParamExtractor:   extractPathParams,
 		PathPatternConverter: convertPathPattern,
 		SupportsEditions:     true,
 	}
@@ -136,7 +136,7 @@ func NewWith(httpExtractor HTTPRuleExtractor, pathExtractor PathParamExtractor,
 			}
 			return strings.ToUpper(s[:1]) + s[1:]
 		},
-		"httpMethod": httpMethodConstant,
+		"httpMethod": toHTTPMethodConstant,
 	})
 
 	// Parse header template
@@ -160,7 +160,7 @@ func (g *Generator) Generate(req *plugin.CodeGeneratorRequest) *plugin.CodeGener
 	resp := new(plugin.CodeGeneratorResponse)
 
 	// Parse options from parameter first
-	if err := g.parseAndSetOptions(req.GetParameter()); err != nil {
+	if err := g.applyOptions(req.GetParameter()); err != nil {
 		resp.Error = proto.String(fmt.Sprintf("invalid options: %v", err))
 		return resp
 	}
@@ -199,8 +199,8 @@ func (g *Generator) Generate(req *plugin.CodeGeneratorRequest) *plugin.CodeGener
 	return resp
 }
 
-// parseAndSetOptions parses options and sets them on the generator
-func (g *Generator) parseAndSetOptions(parameter string) error {
+// applyOptions parses the parameter string and sets options on the generator.
+func (g *Generator) applyOptions(parameter string) error {
 	options, err := ParseOptions(parameter)
 	if err != nil {
 		return err
@@ -236,20 +236,21 @@ func (g *Generator) processFile(
 	}
 
 	// Create output file
-	filename := g.outputFilename(file.GetName())
+	filename := g.getOutputFilename(file.GetName())
 	outputFile := &plugin.CodeGeneratorResponse_File{
 		Name:    proto.String(filename),
 		Content: proto.String(content),
 	}
 
 	// Handle source_relative paths option
-	g.adjustFilenameForSourceRelative(outputFile, file.GetName())
+	g.applySourceRelativePath(outputFile, file.GetName())
 
 	return outputFile, nil
 }
 
-// adjustFilenameForSourceRelative adjusts the output filename for source_relative paths
-func (g *Generator) adjustFilenameForSourceRelative(
+// applySourceRelativePath adjusts the output filename when paths=source_relative is set.
+// It prefixes the output filename with the proto file's directory.
+func (g *Generator) applySourceRelativePath(
 	outputFile *plugin.CodeGeneratorResponse_File,
 	protoFileName string,
 ) {
@@ -343,8 +344,8 @@ func (g *Generator) GenerateCode(data *ServiceData) (string, error) {
 	return buf.String(), nil
 }
 
-// outputFilename returns the output filename for a proto file.
-func (g *Generator) outputFilename(protoFilename string) string {
+// getOutputFilename returns the output filename for a proto file.
+func (g *Generator) getOutputFilename(protoFilename string) string {
 	base := filepath.Base(protoFilename)
 	filename := strings.TrimSuffix(base, ".proto")
 
@@ -368,26 +369,37 @@ func (g *Generator) getPackageName(file *descriptor.FileDescriptorProto) string 
 	return g.extractPackageFromProtoPackage(file.GetPackage())
 }
 
-// extractPackageFromGoPackage extracts the package name from go_package option
+// extractPackageFromGoPackage extracts the Go package name from go_package option.
+//
+// Strategy:
+//   - "github.com/foo/bar;baz" → "baz"   (explicit name after semicolon)
+//   - "github.com/foo/bar"     → "bar"   (last path segment)
+//   - "bar"                    → "bar"   (as-is)
 func (g *Generator) extractPackageFromGoPackage(goPackage string) string {
-	// Check for explicit package name after semicolon
 	if idx := strings.LastIndex(goPackage, ";"); idx >= 0 {
 		return goPackage[idx+1:]
 	}
-	// Otherwise use the last path segment
 	if idx := strings.LastIndex(goPackage, "/"); idx >= 0 {
 		return goPackage[idx+1:]
 	}
 	return goPackage
 }
 
-// extractPackageFromProtoPackage extracts the package name from proto package
+// extractPackageFromProtoPackage derives a Go package name from a proto package.
+//
+// Strategy:
+//   - 1 segment:  "api"             → "api"
+//   - 2 segments: "api.v1"          → "apiv1"    (join all)
+//   - 3+ segments: "api.core.v1"    → "corev1"   (join last 2)
+//
+// The last-two strategy for 3+ segments assumes the final segments are
+// the most specific (e.g., service name + version), while earlier segments
+// are organizational prefixes that can be dropped.
 func (g *Generator) extractPackageFromProtoPackage(protoPackage string) string {
 	if protoPackage == "" {
 		return ""
 	}
 
-	// Split by dots and process
 	parts := strings.Split(protoPackage, ".")
 	switch len(parts) {
 	case 1:
@@ -395,8 +407,6 @@ func (g *Generator) extractPackageFromProtoPackage(protoPackage string) string {
 	case 2:
 		return strings.Join(parts, "")
 	default:
-		// For packages with more than 2 segments, use the last two
-		// Example: api.core.oauth.v1 -> oauthv1
 		lastTwo := parts[len(parts)-2:]
 		return strings.Join(lastTwo, "")
 	}

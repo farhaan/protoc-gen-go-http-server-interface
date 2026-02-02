@@ -253,7 +253,7 @@ func TestGenerateCode(t *testing.T) {
 	}
 }
 
-// Test outputFilename method with different options
+// Test getOutputFilename method with different options
 func TestOutputFilename(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -288,9 +288,9 @@ func TestOutputFilename(t *testing.T) {
 			g := New()
 			g.Options = tt.options
 
-			got := g.outputFilename(tt.protoFilename)
+			got := g.getOutputFilename(tt.protoFilename)
 			if got != tt.want {
-				t.Errorf("outputFilename(%q) = %q, want %q", tt.protoFilename, got, tt.want)
+				t.Errorf("getOutputFilename(%q) = %q, want %q", tt.protoFilename, got, tt.want)
 			}
 		})
 	}
@@ -1221,18 +1221,18 @@ func TestExtractPackageFromProtoPackageEdgeCases(t *testing.T) {
 func TestTypeAssertionSafety(t *testing.T) {
 	t.Parallel()
 
-	// Test parseMethodHTTPRules with method that has no HTTP options
+	// Test extractHTTPRules with method that has no HTTP options
 	method := &descriptor.MethodDescriptorProto{
 		Name: proto.String("TestMethod"),
 	}
 
 	defer func() {
 		if r := recover(); r != nil {
-			t.Errorf("parseMethodHTTPRules panicked on nil options: %v", r)
+			t.Errorf("extractHTTPRules panicked on nil options: %v", r)
 		}
 	}()
 
-	rules := parseMethodHTTPRules(method)
+	rules := extractHTTPRules(method)
 	if len(rules) != 0 {
 		t.Errorf("Expected empty rules for method without options, got %d", len(rules))
 	}

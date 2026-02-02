@@ -16,8 +16,8 @@ type PathParamExtractor func(pattern string) []string
 // PathPatternConverter is the function type for converting path patterns
 type PathPatternConverter func(pattern string) string
 
-// parseMethodHTTPRules extracts HTTP rules from a method descriptor using legacy approach
-func parseMethodHTTPRules(method *descriptor.MethodDescriptorProto) []parser.HTTPRule {
+// extractHTTPRules extracts HTTP rules from a method descriptor.
+func extractHTTPRules(method *descriptor.MethodDescriptorProto) []parser.HTTPRule {
 	rules := []parser.HTTPRule{}
 
 	if method.Options != nil {
@@ -41,8 +41,8 @@ func parseMethodHTTPRules(method *descriptor.MethodDescriptorProto) []parser.HTT
 	return rules
 }
 
-// parsePathParams extracts path parameters from a URL pattern using regex
-func parsePathParams(pattern string) []string {
+// extractPathParams extracts path parameters from a URL pattern.
+func extractPathParams(pattern string) []string {
 	return parser.PathParams(pattern)
 }
 

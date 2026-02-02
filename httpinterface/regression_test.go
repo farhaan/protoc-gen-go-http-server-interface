@@ -158,7 +158,7 @@ func TestRegressionPathParameterHandling(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := parsePathParams(test.pattern)
+		result := extractPathParams(test.pattern)
 		if len(result) != len(test.expected) {
 			t.Errorf("GetPathParams(%q) returned %d params, expected %d",
 				test.pattern, len(result), len(test.expected))
@@ -208,9 +208,9 @@ func TestRegressionOutputFilenames(t *testing.T) {
 			g := New()
 			g.Options = test.options
 
-			result := g.outputFilename(test.protoFile)
+			result := g.getOutputFilename(test.protoFile)
 			if result != test.expectedFile {
-				t.Errorf("outputFilename(%q) = %q, expected %q",
+				t.Errorf("getOutputFilename(%q) = %q, expected %q",
 					test.protoFile, result, test.expectedFile)
 			}
 		})
