@@ -1,5 +1,5 @@
 # Makefile for protoc-gen-go-http-server-interface
-.PHONY: test build install clean
+.PHONY: test build install clean regenerate check-generated lint setup-hooks
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -32,4 +32,22 @@ install-tool:
 clean:
 	rm -rf ./bin/
 	go clean -testcache
+
+# Regenerate all proto files after template/codegen changes
+regenerate: install
+	./scripts/regenerate.sh --skip-build
+
+# Check if generated files are up to date (for CI)
+check-generated: install
+	./scripts/regenerate.sh --skip-build --check
+
+# Run linter
+lint:
+	@command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint not installed"; exit 1; }
+	golangci-lint run ./...
+
+# Setup git hooks
+setup-hooks:
+	git config core.hooksPath .githooks
+	@echo "Git hooks configured to use .githooks/"
 

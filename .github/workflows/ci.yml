@@ -21,6 +21,11 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+          cache-dependency-path: |
+            go.sum
+            tests/go.sum
+            examples/*/go.sum
+            examples/*/*/go.sum
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
@@ -41,6 +46,9 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
+          cache-dependency-path: |
+            go.sum
+            tests/go.sum
 
       - name: Download dependencies
         run: go mod download
@@ -70,6 +78,10 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+          cache-dependency-path: |
+            go.sum
+            examples/*/go.sum
+            examples/*/*/go.sum
 
       - name: Install buf
         uses: bufbuild/buf-setup-action@v1
@@ -97,3 +109,42 @@ jobs:
           go mod download
           buf generate
           go build ./...
+
+  check-generated:
+    name: Check Generated Files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            examples/*/go.sum
+            examples/*/*/go.sum
+
+      - name: Install buf
+        uses: bufbuild/buf-setup-action@v1
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Install plugin
+        run: go install .
+
+      - name: Regenerate examples
+        run: |
+          cd examples/editions/tasks && buf generate
+          cd ../proto3/products && buf generate
+
+      - name: Check for changes
+        run: |
+          if [ -n "$(git status --porcelain -- '*.pb.go')" ]; then
+            echo "Generated files are out of date. Please run './scripts/regenerate.sh' and commit the changes."
+            git diff -- '*.pb.go'
+            exit 1
+          fi
+          echo "Generated files are up to date."

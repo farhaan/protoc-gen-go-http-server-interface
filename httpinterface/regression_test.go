@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface/parser"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
@@ -71,7 +72,7 @@ func TestRegressionRouteGroupGeneration(t *testing.T) {
 						Name:       "GetData",
 						InputType:  "GetDataRequest",
 						OutputType: "GetDataResponse",
-						HTTPRules: []HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "GET", Pattern: "/data/:id", PathParams: []string{"id"}},
 						},
 					},
@@ -115,7 +116,7 @@ func TestRegressionMiddlewareSupport(t *testing.T) {
 						Name:       "Authenticate",
 						InputType:  "AuthRequest",
 						OutputType: "AuthResponse",
-						HTTPRules: []HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "POST", Pattern: "/auth", Body: "*"},
 						},
 					},
@@ -221,9 +222,9 @@ func TestRegressionMultipleHTTPBindings(t *testing.T) {
 	t.Parallel()
 
 	// Mock function that returns multiple HTTP bindings
-	httpRuleExtractor := func(method *descriptorpb.MethodDescriptorProto) []HTTPRule {
+	httpRuleExtractor := func(method *descriptorpb.MethodDescriptorProto) []parser.HTTPRule {
 		if method.GetName() == "GetResource" {
-			return []HTTPRule{
+			return []parser.HTTPRule{
 				{Method: "GET", Pattern: "/v1/resource/{id}", Body: ""},
 				{Method: "GET", Pattern: "/resource/{id}", Body: ""},
 			}
@@ -279,9 +280,9 @@ func TestRegressionServiceFiltering(t *testing.T) {
 	t.Parallel()
 
 	// Mock function that only returns rules for specific methods
-	httpRuleExtractor := func(method *descriptorpb.MethodDescriptorProto) []HTTPRule {
+	httpRuleExtractor := func(method *descriptorpb.MethodDescriptorProto) []parser.HTTPRule {
 		if method.GetName() == "HTTPMethod" {
-			return []HTTPRule{{Method: "GET", Pattern: "/test", Body: ""}}
+			return []parser.HTTPRule{{Method: "GET", Pattern: "/test", Body: ""}}
 		}
 		return nil // No HTTP rules for other methods
 	}
@@ -402,7 +403,7 @@ func TestRegressionTemplateExecution(t *testing.T) {
 						Name:       "Echo",
 						InputType:  "EchoRequest",
 						OutputType: "EchoResponse",
-						HTTPRules: []HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{
 								Method:     "POST",
 								Pattern:    "/echo",
@@ -429,7 +430,7 @@ func TestRegressionTemplateExecution(t *testing.T) {
 		"func RegisterEchoServiceRoutes(r Routes, handler EchoServiceHandler)",
 		"func RegisterEchoRoute(r Routes, handler EchoServiceHandler, middlewares ...Middleware)",
 		"func (g *RouteGroup) RegisterEcho(handler EchoServiceHandler, middlewares ...Middleware)",
-		"r.HandleFunc(\"POST\", \"/echo\", handler.HandleEcho, middlewares...)",
+		"r.HandleFunc(http.MethodPost, \"/echo\", handler.HandleEcho, middlewares...)",
 	}
 
 	for _, expected := range expectedOutputs {

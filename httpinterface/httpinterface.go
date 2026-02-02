@@ -10,6 +10,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface/parser"
 	"google.golang.org/protobuf/proto"
 	descriptor "google.golang.org/protobuf/types/descriptorpb"
 	plugin "google.golang.org/protobuf/types/pluginpb"
@@ -22,6 +23,33 @@ var (
 	//go:embed templates/service-template.go.tmpl
 	serviceTemplate string
 )
+
+// httpMethodConstant converts HTTP method strings to net/http constants
+func httpMethodConstant(method string) string {
+	switch method {
+	case "GET":
+		return "http.MethodGet"
+	case "POST":
+		return "http.MethodPost"
+	case "PUT":
+		return "http.MethodPut"
+	case "DELETE":
+		return "http.MethodDelete"
+	case "PATCH":
+		return "http.MethodPatch"
+	case "HEAD":
+		return "http.MethodHead"
+	case "OPTIONS":
+		return "http.MethodOptions"
+	case "TRACE":
+		return "http.MethodTrace"
+	case "CONNECT":
+		return "http.MethodConnect"
+	default:
+		// For custom methods, return as quoted string
+		return `"` + method + `"`
+	}
+}
 
 // Generator is the httpinterface code generator.
 type Generator struct {
@@ -56,7 +84,7 @@ type MethodInfo struct {
 	Name       string
 	InputType  string
 	OutputType string
-	HTTPRules  []HTTPRule
+	HTTPRules  []parser.HTTPRule
 }
 
 // New creates a new httpinterface generator with an optional custom HTTP rule extractor.
@@ -71,6 +99,7 @@ func New(httpExtractor ...HTTPRuleExtractor) *Generator {
 			}
 			return strings.ToUpper(s[:1]) + s[1:]
 		},
+		"httpMethod": httpMethodConstant,
 	})
 
 	// Parse header template
@@ -107,6 +136,7 @@ func NewWith(httpExtractor HTTPRuleExtractor, pathExtractor PathParamExtractor,
 			}
 			return strings.ToUpper(s[:1]) + s[1:]
 		},
+		"httpMethod": httpMethodConstant,
 	})
 
 	// Parse header template

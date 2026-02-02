@@ -25,7 +25,7 @@ func TestIntegration_CustomHTTPPattern(t *testing.T) {
 						Name:       "HealthCheck",
 						InputType:  "HealthCheckRequest",
 						OutputType: "HealthCheckResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "HEAD", Pattern: "/health", Body: ""},
 						},
 					},
@@ -33,7 +33,7 @@ func TestIntegration_CustomHTTPPattern(t *testing.T) {
 						Name:       "GetOptions",
 						InputType:  "OptionsRequest",
 						OutputType: "OptionsResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "OPTIONS", Pattern: "/api/v1/resources", Body: ""},
 						},
 					},
@@ -48,10 +48,10 @@ func TestIntegration_CustomHTTPPattern(t *testing.T) {
 	}
 
 	// Verify custom methods are in generated code
-	if !strings.Contains(generated, `r.HandleFunc("HEAD"`) {
+	if !strings.Contains(generated, `r.HandleFunc(http.MethodHead`) {
 		t.Error("Missing HEAD method registration in generated code")
 	}
-	if !strings.Contains(generated, `r.HandleFunc("OPTIONS"`) {
+	if !strings.Contains(generated, `r.HandleFunc(http.MethodOptions`) {
 		t.Error("Missing OPTIONS method registration in generated code")
 	}
 }
@@ -128,7 +128,7 @@ func TestIntegration_CustomHTTPPatternParserNilCustom(t *testing.T) {
 						Name:       "NilCustomMethod",
 						InputType:  "Request",
 						OutputType: "Response",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							// Empty method simulates nil Custom after parsing
 							{Method: "", Pattern: "", Body: ""},
 						},
@@ -165,21 +165,21 @@ func TestIntegration_EmptyHTTPRulesNoRegression(t *testing.T) {
 
 	testCases := []struct {
 		name      string
-		httpRules []httpinterface.HTTPRule
+		httpRules []parser.HTTPRule
 	}{
 		{
 			name:      "empty_rules_slice",
-			httpRules: []httpinterface.HTTPRule{},
+			httpRules: []parser.HTTPRule{},
 		},
 		{
 			name: "single_empty_rule",
-			httpRules: []httpinterface.HTTPRule{
+			httpRules: []parser.HTTPRule{
 				{Method: "", Pattern: "", Body: ""},
 			},
 		},
 		{
 			name: "mixed_valid_and_empty",
-			httpRules: []httpinterface.HTTPRule{
+			httpRules: []parser.HTTPRule{
 				{Method: "GET", Pattern: "/valid", Body: ""},
 				{Method: "", Pattern: "", Body: ""},
 			},

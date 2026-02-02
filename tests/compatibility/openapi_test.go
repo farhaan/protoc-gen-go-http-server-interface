@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface"
+	"github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface/parser"
 )
 
 // TestOpenAPICompatibility_BasicGeneration tests that our plugin works correctly
@@ -24,7 +25,7 @@ func TestOpenAPICompatibility_BasicGeneration(t *testing.T) {
 						Name:       "GetProduct",
 						InputType:  "GetProductRequest",
 						OutputType: "Product",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "GET", Pattern: "/products/{product_id}", Body: "", PathParams: []string{"product_id"}},
 						},
 					},
@@ -32,7 +33,7 @@ func TestOpenAPICompatibility_BasicGeneration(t *testing.T) {
 						Name:       "CreateProduct",
 						InputType:  "CreateProductRequest",
 						OutputType: "Product",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "POST", Pattern: "/products", Body: "*"},
 						},
 					},
@@ -40,7 +41,7 @@ func TestOpenAPICompatibility_BasicGeneration(t *testing.T) {
 						Name:       "ListProducts",
 						InputType:  "ListProductsRequest",
 						OutputType: "ListProductsResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "GET", Pattern: "/products", Body: ""},
 						},
 					},
@@ -48,7 +49,7 @@ func TestOpenAPICompatibility_BasicGeneration(t *testing.T) {
 						Name:       "UpdateProduct",
 						InputType:  "UpdateProductRequest",
 						OutputType: "Product",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{
 								Method:     "PUT",
 								Pattern:    "/products/{product.product_id}",
@@ -61,7 +62,7 @@ func TestOpenAPICompatibility_BasicGeneration(t *testing.T) {
 						Name:       "DeleteProduct",
 						InputType:  "DeleteProductRequest",
 						OutputType: "DeleteProductResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "DELETE", Pattern: "/products/{product_id}", Body: "", PathParams: []string{"product_id"}},
 						},
 					},
@@ -85,11 +86,11 @@ func TestOpenAPICompatibility_BasicGeneration(t *testing.T) {
 		"HandleUpdateProduct(w http.ResponseWriter, r *http.Request)",
 		"HandleDeleteProduct(w http.ResponseWriter, r *http.Request)",
 		"RegisterProductServiceRoutes",
-		`"GET", "/products/{product_id}"`,
-		`"POST", "/products"`,
-		`"GET", "/products"`,
-		`"PUT", "/products/{product.product_id}"`,
-		`"DELETE", "/products/{product_id}"`,
+		`http.MethodGet, "/products/{product_id}"`,
+		`http.MethodPost, "/products"`,
+		`http.MethodGet, "/products"`,
+		`http.MethodPut, "/products/{product.product_id}"`,
+		`http.MethodDelete, "/products/{product_id}"`,
 	}
 
 	for _, pattern := range expectedPatterns {
@@ -134,7 +135,7 @@ func TestOpenAPICompatibility_NestedMessages(t *testing.T) {
 						Name:       "GetNestedResource",
 						InputType:  "GetNestedResourceRequest",
 						OutputType: "NestedResourceResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "GET", Pattern: "/api/v1/orgs/{org}/projects/{project}/resources/{resource.metadata.id}",
 								Body: "", PathParams: []string{"org", "project", "resource.metadata.id"}},
 						},
@@ -143,7 +144,7 @@ func TestOpenAPICompatibility_NestedMessages(t *testing.T) {
 						Name:       "UpdateNestedResource",
 						InputType:  "UpdateNestedResourceRequest",
 						OutputType: "NestedResourceResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "PATCH", Pattern: "/api/v1/orgs/{org}/projects/{project}/resources/{resource.metadata.id}",
 								Body: "resource.data", PathParams: []string{"org", "project", "resource.metadata.id"}},
 						},
@@ -190,7 +191,7 @@ func TestOpenAPICompatibility_HTTPBodyVariations(t *testing.T) {
 						Name:       "CreateWithFullBody",
 						InputType:  "CreateRequest",
 						OutputType: "CreateResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "POST", Pattern: "/resources", Body: "*"},
 						},
 					},
@@ -198,7 +199,7 @@ func TestOpenAPICompatibility_HTTPBodyVariations(t *testing.T) {
 						Name:       "UpdateWithFieldBody",
 						InputType:  "UpdateRequest",
 						OutputType: "UpdateResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "PATCH", Pattern: "/resources/{id}", Body: "update_mask", PathParams: []string{"id"}},
 						},
 					},
@@ -206,7 +207,7 @@ func TestOpenAPICompatibility_HTTPBodyVariations(t *testing.T) {
 						Name:       "UpdateWithNestedBody",
 						InputType:  "UpdateNestedRequest",
 						OutputType: "UpdateNestedResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "PUT", Pattern: "/resources/{id}", Body: "resource.data", PathParams: []string{"id"}},
 						},
 					},
@@ -214,7 +215,7 @@ func TestOpenAPICompatibility_HTTPBodyVariations(t *testing.T) {
 						Name:       "GetWithoutBody",
 						InputType:  "GetRequest",
 						OutputType: "GetResponse",
-						HTTPRules: []httpinterface.HTTPRule{
+						HTTPRules: []parser.HTTPRule{
 							{Method: "GET", Pattern: "/resources/{id}", Body: "", PathParams: []string{"id"}},
 						},
 					},
@@ -236,10 +237,10 @@ func TestOpenAPICompatibility_HTTPBodyVariations(t *testing.T) {
 		"HandleUpdateWithFieldBody",
 		"HandleUpdateWithNestedBody",
 		"HandleGetWithoutBody",
-		`"POST", "/resources"`,
-		`"PATCH", "/resources/{id}"`,
-		`"PUT", "/resources/{id}"`,
-		`"GET", "/resources/{id}"`,
+		`http.MethodPost, "/resources"`,
+		`http.MethodPatch, "/resources/{id}"`,
+		`http.MethodPut, "/resources/{id}"`,
+		`http.MethodGet, "/resources/{id}"`,
 	}
 
 	for _, pattern := range expectedPatterns {
@@ -263,11 +264,11 @@ func TestOpenAPICompatibility_MultiServiceGeneration(t *testing.T) {
 				Methods: []httpinterface.MethodInfo{
 					{
 						Name:      "GetUser",
-						HTTPRules: []httpinterface.HTTPRule{{Method: "GET", Pattern: "/users/{id}", PathParams: []string{"id"}}},
+						HTTPRules: []parser.HTTPRule{{Method: "GET", Pattern: "/users/{id}", PathParams: []string{"id"}}},
 					},
 					{
 						Name:      "CreateUser",
-						HTTPRules: []httpinterface.HTTPRule{{Method: "POST", Pattern: "/users", Body: "*"}},
+						HTTPRules: []parser.HTTPRule{{Method: "POST", Pattern: "/users", Body: "*"}},
 					},
 				},
 			},
@@ -276,11 +277,11 @@ func TestOpenAPICompatibility_MultiServiceGeneration(t *testing.T) {
 				Methods: []httpinterface.MethodInfo{
 					{
 						Name:      "GetOrder",
-						HTTPRules: []httpinterface.HTTPRule{{Method: "GET", Pattern: "/orders/{id}", PathParams: []string{"id"}}},
+						HTTPRules: []parser.HTTPRule{{Method: "GET", Pattern: "/orders/{id}", PathParams: []string{"id"}}},
 					},
 					{
 						Name:      "CreateOrder",
-						HTTPRules: []httpinterface.HTTPRule{{Method: "POST", Pattern: "/orders", Body: "*"}},
+						HTTPRules: []parser.HTTPRule{{Method: "POST", Pattern: "/orders", Body: "*"}},
 					},
 				},
 			},
@@ -289,7 +290,7 @@ func TestOpenAPICompatibility_MultiServiceGeneration(t *testing.T) {
 				Methods: []httpinterface.MethodInfo{
 					{
 						Name:      "ProcessPayment",
-						HTTPRules: []httpinterface.HTTPRule{{Method: "POST", Pattern: "/payments", Body: "*"}},
+						HTTPRules: []parser.HTTPRule{{Method: "POST", Pattern: "/payments", Body: "*"}},
 					},
 				},
 			},
@@ -319,11 +320,11 @@ func TestOpenAPICompatibility_MultiServiceGeneration(t *testing.T) {
 
 	// Verify all HTTP endpoints are present
 	expectedEndpoints := []string{
-		`"GET", "/users/{id}"`,
-		`"POST", "/users"`,
-		`"GET", "/orders/{id}"`,
-		`"POST", "/orders"`,
-		`"POST", "/payments"`,
+		`http.MethodGet, "/users/{id}"`,
+		`http.MethodPost, "/users"`,
+		`http.MethodGet, "/orders/{id}"`,
+		`http.MethodPost, "/orders"`,
+		`http.MethodPost, "/payments"`,
 	}
 
 	for _, endpoint := range expectedEndpoints {

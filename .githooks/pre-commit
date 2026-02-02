@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#
+# Pre-commit hook: ensure code compiles and tests pass
+#
+set -e
+
+echo "Running pre-commit checks..."
+
+# Quick build check
+echo "Checking build..."
+go build ./...
+
+# Run unit tests (fast)
+echo "Running quick tests..."
+go test ./httpinterface/... -short -count=1
+
+echo "Pre-commit checks passed!"

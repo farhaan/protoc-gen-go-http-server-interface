@@ -12,7 +12,7 @@ func Register{{ .Name }}Routes(r Routes, handler {{ .Name }}Handler) {
 	}
 {{- range $method := .Methods }}
 {{- range $method.HTTPRules }}
-    r.HandleFunc("{{ .Method }}", "{{ .Pattern }}", handler.Handle{{ $method.Name }})
+    r.HandleFunc({{ httpMethod .Method }}, "{{ .Pattern }}", handler.Handle{{ $method.Name }})
 {{- end }}
 {{- end }}
 }
@@ -30,7 +30,7 @@ func Register{{ $method.Name }}Route(r Routes, handler {{ $.Name }}Handler, midd
 		return
 	}
 {{- range $method.HTTPRules }}
-    r.HandleFunc("{{ .Method }}", "{{ .Pattern }}", handler.Handle{{ $method.Name }}, middlewares...)
+    r.HandleFunc({{ httpMethod .Method }}, "{{ .Pattern }}", handler.Handle{{ $method.Name }}, middlewares...)
 {{- end }}
 }
 
