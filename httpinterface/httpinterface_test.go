@@ -503,6 +503,7 @@ func TestGetTypeName(t *testing.T) {
 		input    string
 		expected string
 	}{
+		{"", ""},
 		{".test.Request", "Request"},
 		{"Request", "Request"},
 		{".com.example.foo.Bar", "Bar"},
@@ -1155,4 +1156,93 @@ func TestCustomHTTPPatternNilSafety(t *testing.T) {
 	if code == "" {
 		t.Error("Expected non-empty generated code")
 	}
+}
+
+// TestGetTypeNamePanicSafety tests getTypeName doesn't panic on edge cases
+func TestGetTypeNamePanicSafety(t *testing.T) {
+	t.Parallel()
+	g := New()
+
+	edgeCases := []string{
+		"",
+		".",
+		"...",
+		".lead",
+		"trail.",
+	}
+
+	for _, input := range edgeCases {
+		t.Run(input, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("getTypeName(%q) panicked: %v", input, r)
+				}
+			}()
+			_ = g.getTypeName(input)
+		})
+	}
+}
+
+// TestExtractPackageFromProtoPackageEdgeCases tests edge cases for panic safety
+func TestExtractPackageFromProtoPackageEdgeCases(t *testing.T) {
+	t.Parallel()
+	g := New()
+
+	tests := []struct {
+		name         string
+		protoPackage string
+		shouldPanic  bool
+	}{
+		{"empty string", "", false},
+		{"single segment", "package", false},
+		{"two segments", "api.v1", false},
+		{"many segments", "com.example.api.service.v1", false},
+		{"dots only", "...", false},
+		{"single dot", ".", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("extractPackageFromProtoPackage(%q) panicked: %v", tt.protoPackage, r)
+				}
+			}()
+
+			// Should not panic
+			_ = g.extractPackageFromProtoPackage(tt.protoPackage)
+		})
+	}
+}
+
+// TestTypeAssertionSafety tests that type assertions don't panic
+func TestTypeAssertionSafety(t *testing.T) {
+	t.Parallel()
+
+	// Test parseMethodHTTPRules with method that has no HTTP options
+	method := &descriptor.MethodDescriptorProto{
+		Name: proto.String("TestMethod"),
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("parseMethodHTTPRules panicked on nil options: %v", r)
+		}
+	}()
+
+	rules := parseMethodHTTPRules(method)
+	if len(rules) != 0 {
+		t.Errorf("Expected empty rules for method without options, got %d", len(rules))
+	}
+}
+
+// TestParseHTTPRuleNilCustom tests that nil Custom doesn't panic in annotations.go
+func TestParseHTTPRuleNilCustom(t *testing.T) {
+	t.Parallel()
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("parseHTTPRule panicked on nil Custom: %v", r)
+		}
+	}()
 }

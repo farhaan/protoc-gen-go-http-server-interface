@@ -24,8 +24,8 @@ func (p *Proto2Parser) ParseHTTPRules(method *descriptor.MethodDescriptorProto) 
 
 	if method.Options != nil {
 		v := proto.GetExtension(method.Options, options.E_Http)
-		httpRule := v.(*options.HttpRule)
-		if httpRule != nil {
+		httpRule, ok := v.(*options.HttpRule)
+		if ok && httpRule != nil {
 			// Add the main rule
 			rule := p.parseHTTPRule(httpRule)
 			if rule.Method != "" {

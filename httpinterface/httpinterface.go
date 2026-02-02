@@ -360,8 +360,6 @@ func (g *Generator) extractPackageFromProtoPackage(protoPackage string) string {
 	// Split by dots and process
 	parts := strings.Split(protoPackage, ".")
 	switch len(parts) {
-	case 0:
-		return ""
 	case 1:
 		return parts[0]
 	case 2:
@@ -376,6 +374,9 @@ func (g *Generator) extractPackageFromProtoPackage(protoPackage string) string {
 
 // getTypeName returns the simple type name from a fully qualified type name.
 func (g *Generator) getTypeName(typeName string) string {
+	if typeName == "" {
+		return ""
+	}
 	parts := strings.Split(typeName, ".")
 	return parts[len(parts)-1]
 }
