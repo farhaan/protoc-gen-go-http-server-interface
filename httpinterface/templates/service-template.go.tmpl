@@ -1,41 +1,65 @@
-// {{ .Name }}Handler is the interface for {{ .Name }} HTTP handlers
+// {{ .Name }}Handler is the interface for {{ .Name }} HTTP handlers.
 type {{ .Name }}Handler interface {
 {{- range .Methods }}
-    Handle{{ .Name }}(w http.ResponseWriter, r *http.Request)
+	Handle{{ .Name }}(w http.ResponseWriter, r *http.Request)
 {{- end }}
 }
 
-// Register{{ .Name }}Routes registers HTTP routes for {{ .Name }}
-func Register{{ .Name }}Routes(r Routes, handler {{ .Name }}Handler) {
-	if r == nil || handler == nil {
-		return
+// Register{{ .Name }}Routes registers HTTP routes for {{ .Name }}.
+// Returns an error if router or handler is nil.
+func Register{{ .Name }}Routes(r Routes, handler {{ .Name }}Handler) error {
+	if r == nil {
+		return ErrNilRouter
+	}
+	if handler == nil {
+		return ErrNilHandler
 	}
 {{- range $method := .Methods }}
 {{- range $method.HTTPRules }}
-    r.HandleFunc({{ httpMethod .Method }}, "{{ .Pattern }}", handler.Handle{{ $method.Name }})
+	r.HandleFunc({{ httpMethod .Method }}, "{{ .Pattern }}", handler.Handle{{ $method.Name }})
 {{- end }}
 {{- end }}
+	return nil
 }
 
-// Register{{ .Name }}Routes is a method on RouteGroup to register all {{ .Name }} routes
+// MustRegister{{ .Name }}Routes registers HTTP routes for {{ .Name }}.
+// Panics if router or handler is nil.
+func MustRegister{{ .Name }}Routes(r Routes, handler {{ .Name }}Handler) {
+	if err := Register{{ .Name }}Routes(r, handler); err != nil {
+		panic(err)
+	}
+}
+
+// Register{{ .Name }}Routes is a convenience method on RouteGroup.
+//
+// Deprecated: Use Register{{ .Name }}Routes(router, handler) instead.
+// This method does not return errors and will not work with Router interface from Group().
 func (g *RouteGroup) Register{{ .Name }}Routes(handler {{ .Name }}Handler) {
-    Register{{ .Name }}Routes(g, handler)
+	_ = Register{{ .Name }}Routes(g, handler)
 }
-
 {{- range $method := .Methods }}
-// Register{{ $method.Name }}Route is a helper that registers the {{ $method.Name }} handler
-// This registers all HTTP bindings for this method ({{ len $method.HTTPRules }} binding(s))
-func Register{{ $method.Name }}Route(r Routes, handler {{ $.Name }}Handler, middlewares ...Middleware) {
-	if r == nil || handler == nil {
-		return
+
+// Register{{ $method.Name }}Route registers the {{ $method.Name }} handler.
+// This registers all HTTP bindings for this method ({{ len $method.HTTPRules }} binding(s)).
+// Returns an error if router or handler is nil.
+func Register{{ $method.Name }}Route(r Routes, handler {{ $.Name }}Handler, middlewares ...Middleware) error {
+	if r == nil {
+		return ErrNilRouter
+	}
+	if handler == nil {
+		return ErrNilHandler
 	}
 {{- range $method.HTTPRules }}
-    r.HandleFunc({{ httpMethod .Method }}, "{{ .Pattern }}", handler.Handle{{ $method.Name }}, middlewares...)
+	r.HandleFunc({{ httpMethod .Method }}, "{{ .Pattern }}", handler.Handle{{ $method.Name }}, middlewares...)
 {{- end }}
+	return nil
 }
 
-// Register{{ $method.Name }} is a method on RouteGroup to register the {{ $method.Name }} handler
+// Register{{ $method.Name }} is a convenience method on RouteGroup.
+//
+// Deprecated: Use Register{{ $method.Name }}Route(router, handler, middlewares...) instead.
+// This method does not return errors and will not work with Router interface from Group().
 func (g *RouteGroup) Register{{ $method.Name }}(handler {{ $.Name }}Handler, middlewares ...Middleware) {
-    Register{{ $method.Name }}Route(g, handler, middlewares...)
+	_ = Register{{ $method.Name }}Route(g, handler, middlewares...)
 }
 {{- end }}

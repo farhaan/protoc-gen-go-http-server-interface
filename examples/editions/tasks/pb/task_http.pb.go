@@ -2,311 +2,375 @@
 package pb
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 )
 
-// Middleware represents a middleware function that wraps an http.Handler
+// Middleware represents a middleware function that wraps an http.Handler.
 type Middleware func(http.Handler) http.Handler
 
-// Routes defines methods for registering routes
+// Routes defines the minimal interface for route registration.
 type Routes interface {
-	// HandleFunc registers a handler function for the given method and pattern
+	// HandleFunc registers a handler function for the given method and pattern.
 	HandleFunc(method, pattern string, handler http.HandlerFunc, middlewares ...Middleware)
-	
-	// Group creates a new RouteGroup with the given prefix and optional middlewares
-	Group(prefix string, middlewares ...Middleware) *RouteGroup
-	
-	// Use applies middlewares to all routes registered after this call
-	Use(middlewares ...Middleware) *RouteGroup
 }
 
-// RouteGroup represents a group of routes with a common prefix and middleware
+// Router extends Routes with grouping and middleware support.
+type Router interface {
+	Routes
+	// Group creates a sub-router with the given prefix.
+	Group(prefix string, middlewares ...Middleware) Router
+	// Use appends middlewares to the chain.
+	Use(middlewares ...Middleware) Router
+}
+
+// RouteGroup implements Router using http.ServeMux.
 type RouteGroup struct {
-	prefix          string
-	middlewares     []Middleware
-	routes          []routeDef
-	mux             *http.ServeMux
+	mux         *http.ServeMux
+	prefix      string
+	middlewares []Middleware
+	routes      []string
 }
 
-// routeDef stores a route definition before it's registered with the mux
-type routeDef struct {
-	method      string
-	pattern     string
-	handler     http.Handler
-}
-
-// NewRouter creates a new router with an optional mux
-// If mux is nil, a new http.ServeMux will be created
+// NewRouter creates a new router with an optional mux.
+// If mux is nil, a new http.ServeMux will be created.
 func NewRouter(mux *http.ServeMux) *RouteGroup {
 	if mux == nil {
 		mux = http.NewServeMux()
 	}
-	
 	return &RouteGroup{
-		prefix:       "",
-		middlewares:  []Middleware{},
-		routes:       []routeDef{},
-		mux:          mux,
+		mux:         mux,
+		prefix:      "",
+		middlewares: nil,
+		routes:      []string{},
 	}
 }
 
-// DefaultRouter creates a new router with a new ServeMux
-// This function exists for backward compatibility
-func DefaultRouter() *RouteGroup {
-	return NewRouter(nil)
+// Mux returns the underlying http.ServeMux.
+func (g *RouteGroup) Mux() *http.ServeMux {
+	return g.mux
 }
 
-// Group creates a new RouteGroup with the given prefix and optional middlewares
-func (g *RouteGroup) Group(prefix string, middlewares ...Middleware) *RouteGroup {
+// joinPath safely joins URL path segments.
+func joinPath(base, path string) string {
+	if path == "" || path == "/" {
+		return base
+	}
+	if base == "" || base == "/" {
+		return path
+	}
+	return strings.TrimSuffix(base, "/") + "/" + strings.TrimPrefix(path, "/")
+}
+
+// Group creates a new RouteGroup with the given prefix and optional middlewares.
+func (g *RouteGroup) Group(prefix string, middlewares ...Middleware) Router {
 	// Ensure prefix starts with /
 	if prefix != "" && !strings.HasPrefix(prefix, "/") {
 		prefix = "/" + prefix
 	}
-	
-	// If prefix is just "/", don't add it again
-	if g.prefix == "/" && prefix == "/" {
-		prefix = "/"
-	} else if prefix == "/" {
-		prefix = g.prefix
-	} else {
-		prefix = g.prefix + prefix
-	}
-	
-	// Combine parent and new middlewares, filtering out nils
-	combinedMiddlewares := make([]Middleware, 0, len(g.middlewares)+len(middlewares))
-	for _, mw := range g.middlewares {
-		if mw != nil {
-			combinedMiddlewares = append(combinedMiddlewares, mw)
-		}
-	}
-	for _, mw := range middlewares {
-		if mw != nil {
-			combinedMiddlewares = append(combinedMiddlewares, mw)
-		}
-	}
 
 	return &RouteGroup{
-		prefix:       prefix,
-		middlewares:  combinedMiddlewares,
-		routes:       []routeDef{}, // Each group gets its own routes slice
-		mux:          g.mux,        // Share the same mux
+		mux:         g.mux,
+		prefix:      joinPath(g.prefix, prefix),
+		middlewares: appendMiddlewares(g.middlewares, middlewares),
+		routes:      []string{},
 	}
 }
 
-// Use applies middlewares to all routes registered after this call
-func (g *RouteGroup) Use(middlewares ...Middleware) *RouteGroup {
-	// Filter out nil middlewares before appending
-	for _, mw := range middlewares {
-		if mw != nil {
-			g.middlewares = append(g.middlewares, mw)
-		}
-	}
+// Use appends middlewares to all routes registered after this call.
+func (g *RouteGroup) Use(middlewares ...Middleware) Router {
+	g.middlewares = appendMiddlewares(g.middlewares, middlewares)
 	return g
 }
 
-// HandleFunc registers a handler function for the given method and pattern
+// HandleFunc registers a handler function for the given method and pattern.
 func (g *RouteGroup) HandleFunc(method, pattern string, handler http.HandlerFunc, middlewares ...Middleware) {
-	// Apply the prefix to the pattern
-	fullPattern := g.prefix
-	if g.prefix == "/" && pattern != "/" {
-		fullPattern = pattern
-	} else if pattern == "/" {
-		fullPattern = g.prefix
-	} else {
-		fullPattern = g.prefix + pattern
-	}
-
-	// Apply middleware chain to the handler
-	var finalHandler http.Handler = handler
-
-	// Filter and collect route-specific middlewares
-	validMiddlewares := make([]Middleware, 0, len(middlewares))
-	for _, mw := range middlewares {
-		if mw != nil {
-			validMiddlewares = append(validMiddlewares, mw)
-		}
-	}
-
-	// Apply route-specific middlewares first (innermost)
-	for i := len(validMiddlewares) - 1; i >= 0; i-- {
-		finalHandler = validMiddlewares[i](finalHandler)
-	}
-
-	// Apply group middlewares (outermost)
-	for i := len(g.middlewares) - 1; i >= 0; i-- {
-		mw := g.middlewares[i]
-		if mw != nil {
-			finalHandler = mw(finalHandler)
-		}
-	}
-	
-	// Store and register the route definition
-	routeDefinition := routeDef{
-		method:   method,
-		pattern:  fullPattern,
-		handler:  finalHandler,
-	}
-	g.routes = append(g.routes, routeDefinition)
-
-	// Register with mux if available
-	if g.mux != nil {
-		routeDefinitionKey := routeDefinition.method + " " + routeDefinition.pattern
-		g.mux.Handle(routeDefinitionKey, routeDefinition.handler)
-	}
-
+	fullPattern := joinPath(g.prefix, pattern)
+	finalHandler := applyMiddlewares(handler, g.middlewares, middlewares)
+	routeKey := method + " " + fullPattern
+	g.mux.Handle(routeKey, finalHandler)
+	g.routes = append(g.routes, routeKey)
 }
 
-func (g RouteGroup) GetRoutes() []string {
-	routes := make([]string, 0, len(g.routes))
-	for _, route := range g.routes {
-		routes = append(routes, route.method+" "+route.pattern)
-	}
-	return routes
+// GetRoutes returns all registered routes for this group.
+func (g *RouteGroup) GetRoutes() []string {
+	return g.routes
 }
 
-
-// ServeHTTP implements the http.Handler interface
+// ServeHTTP implements the http.Handler interface.
 func (g *RouteGroup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if g.mux != nil {
-		g.mux.ServeHTTP(w, r)
-	} else {
-		http.NotFound(w, r)
+	g.mux.ServeHTTP(w, r)
+}
+
+// appendMiddlewares combines parent and new middlewares, filtering out nils.
+func appendMiddlewares(parent, additional []Middleware) []Middleware {
+	result := make([]Middleware, 0, len(parent)+len(additional))
+	for _, mw := range parent {
+		if mw != nil {
+			result = append(result, mw)
+		}
 	}
-}// TaskServiceHandler is the interface for TaskService HTTP handlers
+	for _, mw := range additional {
+		if mw != nil {
+			result = append(result, mw)
+		}
+	}
+	return result
+}
+
+// applyMiddlewares wraps handler with group and route-specific middlewares.
+func applyMiddlewares(handler http.Handler, groupMW, routeMW []Middleware) http.Handler {
+	// Apply route-specific middlewares first (innermost)
+	for i := len(routeMW) - 1; i >= 0; i-- {
+		if routeMW[i] != nil {
+			handler = routeMW[i](handler)
+		}
+	}
+	// Apply group middlewares (outermost)
+	for i := len(groupMW) - 1; i >= 0; i-- {
+		if groupMW[i] != nil {
+			handler = groupMW[i](handler)
+		}
+	}
+	return handler
+}
+
+// ErrNilRouter is returned when a nil router is passed to a register function.
+var ErrNilRouter = errors.New("protogen: router is nil")
+
+// ErrNilHandler is returned when a nil handler is passed to a register function.
+var ErrNilHandler = errors.New("protogen: handler is nil")
+
+// DefaultRouter creates a new router with a new ServeMux.
+//
+// Deprecated: Use NewRouter(nil) instead.
+func DefaultRouter() *RouteGroup {
+	return NewRouter(nil)
+}
+
+// TaskServiceHandler is the interface for TaskService HTTP handlers.
 type TaskServiceHandler interface {
-    HandleCreateTask(w http.ResponseWriter, r *http.Request)
-    HandleGetTask(w http.ResponseWriter, r *http.Request)
-    HandleUpdateTask(w http.ResponseWriter, r *http.Request)
-    HandleDeleteTask(w http.ResponseWriter, r *http.Request)
-    HandleListTasks(w http.ResponseWriter, r *http.Request)
-    HandleCompleteTask(w http.ResponseWriter, r *http.Request)
-    HandleGetTasksByProject(w http.ResponseWriter, r *http.Request)
-    HandleAssignTask(w http.ResponseWriter, r *http.Request)
+	HandleCreateTask(w http.ResponseWriter, r *http.Request)
+	HandleGetTask(w http.ResponseWriter, r *http.Request)
+	HandleUpdateTask(w http.ResponseWriter, r *http.Request)
+	HandleDeleteTask(w http.ResponseWriter, r *http.Request)
+	HandleListTasks(w http.ResponseWriter, r *http.Request)
+	HandleCompleteTask(w http.ResponseWriter, r *http.Request)
+	HandleGetTasksByProject(w http.ResponseWriter, r *http.Request)
+	HandleAssignTask(w http.ResponseWriter, r *http.Request)
 }
 
-// RegisterTaskServiceRoutes registers HTTP routes for TaskService
-func RegisterTaskServiceRoutes(r Routes, handler TaskServiceHandler) {
-	if r == nil || handler == nil {
-		return
+// RegisterTaskServiceRoutes registers HTTP routes for TaskService.
+// Returns an error if router or handler is nil.
+func RegisterTaskServiceRoutes(r Routes, handler TaskServiceHandler) error {
+	if r == nil {
+		return ErrNilRouter
 	}
-    r.HandleFunc(http.MethodPost, "/api/v1/tasks", handler.HandleCreateTask)
-    r.HandleFunc(http.MethodGet, "/api/v1/tasks/{task_id}", handler.HandleGetTask)
-    r.HandleFunc(http.MethodPut, "/api/v1/tasks/{task_id}", handler.HandleUpdateTask)
-    r.HandleFunc(http.MethodPatch, "/api/v1/tasks/{task_id}", handler.HandleUpdateTask)
-    r.HandleFunc(http.MethodDelete, "/api/v1/tasks/{task_id}", handler.HandleDeleteTask)
-    r.HandleFunc(http.MethodGet, "/api/v1/tasks", handler.HandleListTasks)
-    r.HandleFunc(http.MethodPost, "/api/v1/tasks/{task_id}/complete", handler.HandleCompleteTask)
-    r.HandleFunc(http.MethodGet, "/api/v1/projects/{project_id}/tasks", handler.HandleGetTasksByProject)
-    r.HandleFunc(http.MethodPost, "/api/v1/projects/{project_id}/tasks/{task_id}/assign/{user_id}", handler.HandleAssignTask)
+	if handler == nil {
+		return ErrNilHandler
+	}
+	r.HandleFunc(http.MethodPost, "/api/v1/tasks", handler.HandleCreateTask)
+	r.HandleFunc(http.MethodGet, "/api/v1/tasks/{task_id}", handler.HandleGetTask)
+	r.HandleFunc(http.MethodPut, "/api/v1/tasks/{task_id}", handler.HandleUpdateTask)
+	r.HandleFunc(http.MethodPatch, "/api/v1/tasks/{task_id}", handler.HandleUpdateTask)
+	r.HandleFunc(http.MethodDelete, "/api/v1/tasks/{task_id}", handler.HandleDeleteTask)
+	r.HandleFunc(http.MethodGet, "/api/v1/tasks", handler.HandleListTasks)
+	r.HandleFunc(http.MethodPost, "/api/v1/tasks/{task_id}/complete", handler.HandleCompleteTask)
+	r.HandleFunc(http.MethodGet, "/api/v1/projects/{project_id}/tasks", handler.HandleGetTasksByProject)
+	r.HandleFunc(http.MethodPost, "/api/v1/projects/{project_id}/tasks/{task_id}/assign/{user_id}", handler.HandleAssignTask)
+	return nil
 }
 
-// RegisterTaskServiceRoutes is a method on RouteGroup to register all TaskService routes
+// MustRegisterTaskServiceRoutes registers HTTP routes for TaskService.
+// Panics if router or handler is nil.
+func MustRegisterTaskServiceRoutes(r Routes, handler TaskServiceHandler) {
+	if err := RegisterTaskServiceRoutes(r, handler); err != nil {
+		panic(err)
+	}
+}
+
+// RegisterTaskServiceRoutes is a convenience method on RouteGroup.
+//
+// Deprecated: Use RegisterTaskServiceRoutes(router, handler) instead.
+// This method does not return errors and will not work with Router interface from Group().
 func (g *RouteGroup) RegisterTaskServiceRoutes(handler TaskServiceHandler) {
-    RegisterTaskServiceRoutes(g, handler)
-}
-// RegisterCreateTaskRoute is a helper that registers the CreateTask handler
-// This registers all HTTP bindings for this method (1 binding(s))
-func RegisterCreateTaskRoute(r Routes, handler TaskServiceHandler, middlewares ...Middleware) {
-	if r == nil || handler == nil {
-		return
-	}
-    r.HandleFunc(http.MethodPost, "/api/v1/tasks", handler.HandleCreateTask, middlewares...)
+	_ = RegisterTaskServiceRoutes(g, handler)
 }
 
-// RegisterCreateTask is a method on RouteGroup to register the CreateTask handler
+// RegisterCreateTaskRoute registers the CreateTask handler.
+// This registers all HTTP bindings for this method (1 binding(s)).
+// Returns an error if router or handler is nil.
+func RegisterCreateTaskRoute(r Routes, handler TaskServiceHandler, middlewares ...Middleware) error {
+	if r == nil {
+		return ErrNilRouter
+	}
+	if handler == nil {
+		return ErrNilHandler
+	}
+	r.HandleFunc(http.MethodPost, "/api/v1/tasks", handler.HandleCreateTask, middlewares...)
+	return nil
+}
+
+// RegisterCreateTask is a convenience method on RouteGroup.
+//
+// Deprecated: Use RegisterCreateTaskRoute(router, handler, middlewares...) instead.
+// This method does not return errors and will not work with Router interface from Group().
 func (g *RouteGroup) RegisterCreateTask(handler TaskServiceHandler, middlewares ...Middleware) {
-    RegisterCreateTaskRoute(g, handler, middlewares...)
-}
-// RegisterGetTaskRoute is a helper that registers the GetTask handler
-// This registers all HTTP bindings for this method (1 binding(s))
-func RegisterGetTaskRoute(r Routes, handler TaskServiceHandler, middlewares ...Middleware) {
-	if r == nil || handler == nil {
-		return
-	}
-    r.HandleFunc(http.MethodGet, "/api/v1/tasks/{task_id}", handler.HandleGetTask, middlewares...)
+	_ = RegisterCreateTaskRoute(g, handler, middlewares...)
 }
 
-// RegisterGetTask is a method on RouteGroup to register the GetTask handler
+// RegisterGetTaskRoute registers the GetTask handler.
+// This registers all HTTP bindings for this method (1 binding(s)).
+// Returns an error if router or handler is nil.
+func RegisterGetTaskRoute(r Routes, handler TaskServiceHandler, middlewares ...Middleware) error {
+	if r == nil {
+		return ErrNilRouter
+	}
+	if handler == nil {
+		return ErrNilHandler
+	}
+	r.HandleFunc(http.MethodGet, "/api/v1/tasks/{task_id}", handler.HandleGetTask, middlewares...)
+	return nil
+}
+
+// RegisterGetTask is a convenience method on RouteGroup.
+//
+// Deprecated: Use RegisterGetTaskRoute(router, handler, middlewares...) instead.
+// This method does not return errors and will not work with Router interface from Group().
 func (g *RouteGroup) RegisterGetTask(handler TaskServiceHandler, middlewares ...Middleware) {
-    RegisterGetTaskRoute(g, handler, middlewares...)
-}
-// RegisterUpdateTaskRoute is a helper that registers the UpdateTask handler
-// This registers all HTTP bindings for this method (2 binding(s))
-func RegisterUpdateTaskRoute(r Routes, handler TaskServiceHandler, middlewares ...Middleware) {
-	if r == nil || handler == nil {
-		return
-	}
-    r.HandleFunc(http.MethodPut, "/api/v1/tasks/{task_id}", handler.HandleUpdateTask, middlewares...)
-    r.HandleFunc(http.MethodPatch, "/api/v1/tasks/{task_id}", handler.HandleUpdateTask, middlewares...)
+	_ = RegisterGetTaskRoute(g, handler, middlewares...)
 }
 
-// RegisterUpdateTask is a method on RouteGroup to register the UpdateTask handler
+// RegisterUpdateTaskRoute registers the UpdateTask handler.
+// This registers all HTTP bindings for this method (2 binding(s)).
+// Returns an error if router or handler is nil.
+func RegisterUpdateTaskRoute(r Routes, handler TaskServiceHandler, middlewares ...Middleware) error {
+	if r == nil {
+		return ErrNilRouter
+	}
+	if handler == nil {
+		return ErrNilHandler
+	}
+	r.HandleFunc(http.MethodPut, "/api/v1/tasks/{task_id}", handler.HandleUpdateTask, middlewares...)
+	r.HandleFunc(http.MethodPatch, "/api/v1/tasks/{task_id}", handler.HandleUpdateTask, middlewares...)
+	return nil
+}
+
+// RegisterUpdateTask is a convenience method on RouteGroup.
+//
+// Deprecated: Use RegisterUpdateTaskRoute(router, handler, middlewares...) instead.
+// This method does not return errors and will not work with Router interface from Group().
 func (g *RouteGroup) RegisterUpdateTask(handler TaskServiceHandler, middlewares ...Middleware) {
-    RegisterUpdateTaskRoute(g, handler, middlewares...)
-}
-// RegisterDeleteTaskRoute is a helper that registers the DeleteTask handler
-// This registers all HTTP bindings for this method (1 binding(s))
-func RegisterDeleteTaskRoute(r Routes, handler TaskServiceHandler, middlewares ...Middleware) {
-	if r == nil || handler == nil {
-		return
-	}
-    r.HandleFunc(http.MethodDelete, "/api/v1/tasks/{task_id}", handler.HandleDeleteTask, middlewares...)
+	_ = RegisterUpdateTaskRoute(g, handler, middlewares...)
 }
 
-// RegisterDeleteTask is a method on RouteGroup to register the DeleteTask handler
+// RegisterDeleteTaskRoute registers the DeleteTask handler.
+// This registers all HTTP bindings for this method (1 binding(s)).
+// Returns an error if router or handler is nil.
+func RegisterDeleteTaskRoute(r Routes, handler TaskServiceHandler, middlewares ...Middleware) error {
+	if r == nil {
+		return ErrNilRouter
+	}
+	if handler == nil {
+		return ErrNilHandler
+	}
+	r.HandleFunc(http.MethodDelete, "/api/v1/tasks/{task_id}", handler.HandleDeleteTask, middlewares...)
+	return nil
+}
+
+// RegisterDeleteTask is a convenience method on RouteGroup.
+//
+// Deprecated: Use RegisterDeleteTaskRoute(router, handler, middlewares...) instead.
+// This method does not return errors and will not work with Router interface from Group().
 func (g *RouteGroup) RegisterDeleteTask(handler TaskServiceHandler, middlewares ...Middleware) {
-    RegisterDeleteTaskRoute(g, handler, middlewares...)
-}
-// RegisterListTasksRoute is a helper that registers the ListTasks handler
-// This registers all HTTP bindings for this method (1 binding(s))
-func RegisterListTasksRoute(r Routes, handler TaskServiceHandler, middlewares ...Middleware) {
-	if r == nil || handler == nil {
-		return
-	}
-    r.HandleFunc(http.MethodGet, "/api/v1/tasks", handler.HandleListTasks, middlewares...)
+	_ = RegisterDeleteTaskRoute(g, handler, middlewares...)
 }
 
-// RegisterListTasks is a method on RouteGroup to register the ListTasks handler
+// RegisterListTasksRoute registers the ListTasks handler.
+// This registers all HTTP bindings for this method (1 binding(s)).
+// Returns an error if router or handler is nil.
+func RegisterListTasksRoute(r Routes, handler TaskServiceHandler, middlewares ...Middleware) error {
+	if r == nil {
+		return ErrNilRouter
+	}
+	if handler == nil {
+		return ErrNilHandler
+	}
+	r.HandleFunc(http.MethodGet, "/api/v1/tasks", handler.HandleListTasks, middlewares...)
+	return nil
+}
+
+// RegisterListTasks is a convenience method on RouteGroup.
+//
+// Deprecated: Use RegisterListTasksRoute(router, handler, middlewares...) instead.
+// This method does not return errors and will not work with Router interface from Group().
 func (g *RouteGroup) RegisterListTasks(handler TaskServiceHandler, middlewares ...Middleware) {
-    RegisterListTasksRoute(g, handler, middlewares...)
-}
-// RegisterCompleteTaskRoute is a helper that registers the CompleteTask handler
-// This registers all HTTP bindings for this method (1 binding(s))
-func RegisterCompleteTaskRoute(r Routes, handler TaskServiceHandler, middlewares ...Middleware) {
-	if r == nil || handler == nil {
-		return
-	}
-    r.HandleFunc(http.MethodPost, "/api/v1/tasks/{task_id}/complete", handler.HandleCompleteTask, middlewares...)
+	_ = RegisterListTasksRoute(g, handler, middlewares...)
 }
 
-// RegisterCompleteTask is a method on RouteGroup to register the CompleteTask handler
+// RegisterCompleteTaskRoute registers the CompleteTask handler.
+// This registers all HTTP bindings for this method (1 binding(s)).
+// Returns an error if router or handler is nil.
+func RegisterCompleteTaskRoute(r Routes, handler TaskServiceHandler, middlewares ...Middleware) error {
+	if r == nil {
+		return ErrNilRouter
+	}
+	if handler == nil {
+		return ErrNilHandler
+	}
+	r.HandleFunc(http.MethodPost, "/api/v1/tasks/{task_id}/complete", handler.HandleCompleteTask, middlewares...)
+	return nil
+}
+
+// RegisterCompleteTask is a convenience method on RouteGroup.
+//
+// Deprecated: Use RegisterCompleteTaskRoute(router, handler, middlewares...) instead.
+// This method does not return errors and will not work with Router interface from Group().
 func (g *RouteGroup) RegisterCompleteTask(handler TaskServiceHandler, middlewares ...Middleware) {
-    RegisterCompleteTaskRoute(g, handler, middlewares...)
-}
-// RegisterGetTasksByProjectRoute is a helper that registers the GetTasksByProject handler
-// This registers all HTTP bindings for this method (1 binding(s))
-func RegisterGetTasksByProjectRoute(r Routes, handler TaskServiceHandler, middlewares ...Middleware) {
-	if r == nil || handler == nil {
-		return
-	}
-    r.HandleFunc(http.MethodGet, "/api/v1/projects/{project_id}/tasks", handler.HandleGetTasksByProject, middlewares...)
+	_ = RegisterCompleteTaskRoute(g, handler, middlewares...)
 }
 
-// RegisterGetTasksByProject is a method on RouteGroup to register the GetTasksByProject handler
+// RegisterGetTasksByProjectRoute registers the GetTasksByProject handler.
+// This registers all HTTP bindings for this method (1 binding(s)).
+// Returns an error if router or handler is nil.
+func RegisterGetTasksByProjectRoute(r Routes, handler TaskServiceHandler, middlewares ...Middleware) error {
+	if r == nil {
+		return ErrNilRouter
+	}
+	if handler == nil {
+		return ErrNilHandler
+	}
+	r.HandleFunc(http.MethodGet, "/api/v1/projects/{project_id}/tasks", handler.HandleGetTasksByProject, middlewares...)
+	return nil
+}
+
+// RegisterGetTasksByProject is a convenience method on RouteGroup.
+//
+// Deprecated: Use RegisterGetTasksByProjectRoute(router, handler, middlewares...) instead.
+// This method does not return errors and will not work with Router interface from Group().
 func (g *RouteGroup) RegisterGetTasksByProject(handler TaskServiceHandler, middlewares ...Middleware) {
-    RegisterGetTasksByProjectRoute(g, handler, middlewares...)
-}
-// RegisterAssignTaskRoute is a helper that registers the AssignTask handler
-// This registers all HTTP bindings for this method (1 binding(s))
-func RegisterAssignTaskRoute(r Routes, handler TaskServiceHandler, middlewares ...Middleware) {
-	if r == nil || handler == nil {
-		return
-	}
-    r.HandleFunc(http.MethodPost, "/api/v1/projects/{project_id}/tasks/{task_id}/assign/{user_id}", handler.HandleAssignTask, middlewares...)
+	_ = RegisterGetTasksByProjectRoute(g, handler, middlewares...)
 }
 
-// RegisterAssignTask is a method on RouteGroup to register the AssignTask handler
+// RegisterAssignTaskRoute registers the AssignTask handler.
+// This registers all HTTP bindings for this method (1 binding(s)).
+// Returns an error if router or handler is nil.
+func RegisterAssignTaskRoute(r Routes, handler TaskServiceHandler, middlewares ...Middleware) error {
+	if r == nil {
+		return ErrNilRouter
+	}
+	if handler == nil {
+		return ErrNilHandler
+	}
+	r.HandleFunc(http.MethodPost, "/api/v1/projects/{project_id}/tasks/{task_id}/assign/{user_id}", handler.HandleAssignTask, middlewares...)
+	return nil
+}
+
+// RegisterAssignTask is a convenience method on RouteGroup.
+//
+// Deprecated: Use RegisterAssignTaskRoute(router, handler, middlewares...) instead.
+// This method does not return errors and will not work with Router interface from Group().
 func (g *RouteGroup) RegisterAssignTask(handler TaskServiceHandler, middlewares ...Middleware) {
-    RegisterAssignTaskRoute(g, handler, middlewares...)
+	_ = RegisterAssignTaskRoute(g, handler, middlewares...)
 }
