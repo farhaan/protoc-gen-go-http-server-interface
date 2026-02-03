@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/farhaan/protoc-gen-go-http-server-interface/examples/editions/tasks v0.0.0
-	github.com/go-chi/chi/v5 v5.0.12
+	github.com/go-chi/chi/v5 v5.2.2
 )
 
 require (
