@@ -407,7 +407,7 @@ func TestEditionsE2E_RouteGroup(t *testing.T) {
 
 	router := pb.NewRouter(nil)
 	v2 := router.Group("/v2")
-	v2.RegisterTaskServiceRoutes(taskHandler)
+	_ = pb.RegisterTaskServiceRoutes(v2, taskHandler)
 
 	server := httptest.NewServer(router)
 	defer server.Close()

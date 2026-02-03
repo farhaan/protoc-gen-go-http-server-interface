@@ -2,175 +2,150 @@
 package {{ .PackageName }}
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 )
 
-// Middleware represents a middleware function that wraps an http.Handler
+// Middleware represents a middleware function that wraps an http.Handler.
 type Middleware func(http.Handler) http.Handler
 
-// Routes defines methods for registering routes
+// Routes defines the minimal interface for route registration.
 type Routes interface {
-	// HandleFunc registers a handler function for the given method and pattern
+	// HandleFunc registers a handler function for the given method and pattern.
 	HandleFunc(method, pattern string, handler http.HandlerFunc, middlewares ...Middleware)
-	
-	// Group creates a new RouteGroup with the given prefix and optional middlewares
-	Group(prefix string, middlewares ...Middleware) *RouteGroup
-	
-	// Use applies middlewares to all routes registered after this call
-	Use(middlewares ...Middleware) *RouteGroup
 }
 
-// RouteGroup represents a group of routes with a common prefix and middleware
+// Router extends Routes with grouping and middleware support.
+type Router interface {
+	Routes
+	// Group creates a sub-router with the given prefix.
+	Group(prefix string, middlewares ...Middleware) Router
+	// Use appends middlewares to the chain.
+	Use(middlewares ...Middleware) Router
+}
+
+// RouteGroup implements Router using http.ServeMux.
 type RouteGroup struct {
-	prefix          string
-	middlewares     []Middleware
-	routes          []routeDef
-	mux             *http.ServeMux
+	mux         *http.ServeMux
+	prefix      string
+	middlewares []Middleware
+	routes      []string
 }
 
-// routeDef stores a route definition before it's registered with the mux
-type routeDef struct {
-	method      string
-	pattern     string
-	handler     http.Handler
-}
-
-// NewRouter creates a new router with an optional mux
-// If mux is nil, a new http.ServeMux will be created
+// NewRouter creates a new router with an optional mux.
+// If mux is nil, a new http.ServeMux will be created.
 func NewRouter(mux *http.ServeMux) *RouteGroup {
 	if mux == nil {
 		mux = http.NewServeMux()
 	}
-	
 	return &RouteGroup{
-		prefix:       "",
-		middlewares:  []Middleware{},
-		routes:       []routeDef{},
-		mux:          mux,
+		mux:         mux,
+		prefix:      "",
+		middlewares: nil,
+		routes:      []string{},
 	}
 }
 
-// DefaultRouter creates a new router with a new ServeMux
-// This function exists for backward compatibility
-func DefaultRouter() *RouteGroup {
-	return NewRouter(nil)
+// Mux returns the underlying http.ServeMux.
+func (g *RouteGroup) Mux() *http.ServeMux {
+	return g.mux
 }
 
-// Group creates a new RouteGroup with the given prefix and optional middlewares
-func (g *RouteGroup) Group(prefix string, middlewares ...Middleware) *RouteGroup {
+// joinPath safely joins URL path segments.
+func joinPath(base, path string) string {
+	if path == "" || path == "/" {
+		return base
+	}
+	if base == "" || base == "/" {
+		return path
+	}
+	return strings.TrimSuffix(base, "/") + "/" + strings.TrimPrefix(path, "/")
+}
+
+// Group creates a new RouteGroup with the given prefix and optional middlewares.
+func (g *RouteGroup) Group(prefix string, middlewares ...Middleware) Router {
 	// Ensure prefix starts with /
 	if prefix != "" && !strings.HasPrefix(prefix, "/") {
 		prefix = "/" + prefix
 	}
-	
-	// If prefix is just "/", don't add it again
-	if g.prefix == "/" && prefix == "/" {
-		prefix = "/"
-	} else if prefix == "/" {
-		prefix = g.prefix
-	} else {
-		prefix = g.prefix + prefix
-	}
-	
-	// Combine parent and new middlewares, filtering out nils
-	combinedMiddlewares := make([]Middleware, 0, len(g.middlewares)+len(middlewares))
-	for _, mw := range g.middlewares {
-		if mw != nil {
-			combinedMiddlewares = append(combinedMiddlewares, mw)
-		}
-	}
-	for _, mw := range middlewares {
-		if mw != nil {
-			combinedMiddlewares = append(combinedMiddlewares, mw)
-		}
-	}
 
 	return &RouteGroup{
-		prefix:       prefix,
-		middlewares:  combinedMiddlewares,
-		routes:       []routeDef{}, // Each group gets its own routes slice
-		mux:          g.mux,        // Share the same mux
+		mux:         g.mux,
+		prefix:      joinPath(g.prefix, prefix),
+		middlewares: appendMiddlewares(g.middlewares, middlewares),
+		routes:      []string{},
 	}
 }
 
-// Use applies middlewares to all routes registered after this call
-func (g *RouteGroup) Use(middlewares ...Middleware) *RouteGroup {
-	// Filter out nil middlewares before appending
-	for _, mw := range middlewares {
-		if mw != nil {
-			g.middlewares = append(g.middlewares, mw)
-		}
-	}
+// Use appends middlewares to all routes registered after this call.
+func (g *RouteGroup) Use(middlewares ...Middleware) Router {
+	g.middlewares = appendMiddlewares(g.middlewares, middlewares)
 	return g
 }
 
-// HandleFunc registers a handler function for the given method and pattern
+// HandleFunc registers a handler function for the given method and pattern.
 func (g *RouteGroup) HandleFunc(method, pattern string, handler http.HandlerFunc, middlewares ...Middleware) {
-	// Apply the prefix to the pattern
-	fullPattern := g.prefix
-	if g.prefix == "/" && pattern != "/" {
-		fullPattern = pattern
-	} else if pattern == "/" {
-		fullPattern = g.prefix
-	} else {
-		fullPattern = g.prefix + pattern
-	}
-
-	// Apply middleware chain to the handler
-	var finalHandler http.Handler = handler
-
-	// Filter and collect route-specific middlewares
-	validMiddlewares := make([]Middleware, 0, len(middlewares))
-	for _, mw := range middlewares {
-		if mw != nil {
-			validMiddlewares = append(validMiddlewares, mw)
-		}
-	}
-
-	// Apply route-specific middlewares first (innermost)
-	for i := len(validMiddlewares) - 1; i >= 0; i-- {
-		finalHandler = validMiddlewares[i](finalHandler)
-	}
-
-	// Apply group middlewares (outermost)
-	for i := len(g.middlewares) - 1; i >= 0; i-- {
-		mw := g.middlewares[i]
-		if mw != nil {
-			finalHandler = mw(finalHandler)
-		}
-	}
-	
-	// Store and register the route definition
-	routeDefinition := routeDef{
-		method:   method,
-		pattern:  fullPattern,
-		handler:  finalHandler,
-	}
-	g.routes = append(g.routes, routeDefinition)
-
-	// Register with mux if available
-	if g.mux != nil {
-		routeDefinitionKey := routeDefinition.method + " " + routeDefinition.pattern
-		g.mux.Handle(routeDefinitionKey, routeDefinition.handler)
-	}
-
+	fullPattern := joinPath(g.prefix, pattern)
+	finalHandler := applyMiddlewares(handler, g.middlewares, middlewares)
+	routeKey := method + " " + fullPattern
+	g.mux.Handle(routeKey, finalHandler)
+	g.routes = append(g.routes, routeKey)
 }
 
-func (g RouteGroup) GetRoutes() []string {
-	routes := make([]string, 0, len(g.routes))
-	for _, route := range g.routes {
-		routes = append(routes, route.method+" "+route.pattern)
-	}
-	return routes
+// GetRoutes returns all registered routes for this group.
+func (g *RouteGroup) GetRoutes() []string {
+	return g.routes
 }
 
-
-// ServeHTTP implements the http.Handler interface
+// ServeHTTP implements the http.Handler interface.
 func (g *RouteGroup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if g.mux != nil {
-		g.mux.ServeHTTP(w, r)
-	} else {
-		http.NotFound(w, r)
-	}
+	g.mux.ServeHTTP(w, r)
 }
+
+// appendMiddlewares combines parent and new middlewares, filtering out nils.
+func appendMiddlewares(parent, additional []Middleware) []Middleware {
+	result := make([]Middleware, 0, len(parent)+len(additional))
+	for _, mw := range parent {
+		if mw != nil {
+			result = append(result, mw)
+		}
+	}
+	for _, mw := range additional {
+		if mw != nil {
+			result = append(result, mw)
+		}
+	}
+	return result
+}
+
+// applyMiddlewares wraps handler with group and route-specific middlewares.
+func applyMiddlewares(handler http.Handler, groupMW, routeMW []Middleware) http.Handler {
+	// Apply route-specific middlewares first (innermost)
+	for i := len(routeMW) - 1; i >= 0; i-- {
+		if routeMW[i] != nil {
+			handler = routeMW[i](handler)
+		}
+	}
+	// Apply group middlewares (outermost)
+	for i := len(groupMW) - 1; i >= 0; i-- {
+		if groupMW[i] != nil {
+			handler = groupMW[i](handler)
+		}
+	}
+	return handler
+}
+
+// ErrNilRouter is returned when a nil router is passed to a register function.
+var ErrNilRouter = errors.New("protogen: router is nil")
+
+// ErrNilHandler is returned when a nil handler is passed to a register function.
+var ErrNilHandler = errors.New("protogen: handler is nil")
+
+// DefaultRouter creates a new router with a new ServeMux.
+//
+// Deprecated: Use NewRouter(nil) instead.
+func DefaultRouter() *RouteGroup {
+	return NewRouter(nil)
+}
+

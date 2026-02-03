@@ -83,22 +83,22 @@ func main() {
 	// OPTION 2: Add path prefixes to completely avoid conflicts
 	// Create service-specific groups with different prefixes
 	productsApi := productRouter.Group("/api/products")
-	productsApi.RegisterProductServiceRoutes(productHandler)
+	_ = productPb.RegisterProductServiceRoutes(productsApi, productHandler)
 
 	usersApi := userRouter.Group("/api/users")
-	usersApi.RegisterUserServiceRoutes(userHandler)
+	_ = userPb.RegisterUserServiceRoutes(usersApi, userHandler)
 
 	// OPTION 3: Use API versioning with more specific paths
 	// These won't conflict with the previous routes because they're more specific
 	v1Products := productRouter.Group("/api/v1/products").Use(productPb.Middleware(Auth()))
-	v1Products.RegisterGetProduct(productHandler)
-	v1Products.RegisterListProducts(productHandler, productPb.Middleware(RateLimiter(60)))
-	v1Products.RegisterCreateProduct(productHandler)
+	_ = productPb.RegisterGetProductRoute(v1Products, productHandler)
+	_ = productPb.RegisterListProductsRoute(v1Products, productHandler, productPb.Middleware(RateLimiter(60)))
+	_ = productPb.RegisterCreateProductRoute(v1Products, productHandler)
 
 	v1Users := userRouter.Group("/api/v1/users").Use(userPb.Middleware(Auth()))
-	v1Users.RegisterGetUser(userHandler)
-	v1Users.RegisterListUsers(userHandler, userPb.Middleware(RateLimiter(30)))
-	v1Users.RegisterCreateUser(userHandler)
+	_ = userPb.RegisterGetUserRoute(v1Users, userHandler)
+	_ = userPb.RegisterListUsersRoute(v1Users, userHandler, userPb.Middleware(RateLimiter(30)))
+	_ = userPb.RegisterCreateUserRoute(v1Users, userHandler)
 
 	// Add some paths that would normally conflict, but don't because of method+path specificity
 	productRouter.HandleFunc("GET", "/health", func(w http.ResponseWriter, r *http.Request) {
