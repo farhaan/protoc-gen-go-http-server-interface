@@ -430,7 +430,8 @@ func TestRegressionTemplateExecution(t *testing.T) {
 		"func RegisterEchoServiceRoutes(r Routes, handler EchoServiceHandler)",
 		"func RegisterEchoRoute(r Routes, handler EchoServiceHandler, middlewares ...Middleware)",
 		"func (g *RouteGroup) RegisterEcho(handler EchoServiceHandler, middlewares ...Middleware)",
-		"r.HandleFunc(http.MethodPost, \"/echo\", handler.HandleEcho, middlewares...)",
+		"h := applyMiddlewares(http.HandlerFunc(handler.HandleEcho), middlewares)",
+		"r.HandleFunc(http.MethodPost, \"/echo\", h.ServeHTTP)",
 	}
 
 	for _, expected := range expectedOutputs {

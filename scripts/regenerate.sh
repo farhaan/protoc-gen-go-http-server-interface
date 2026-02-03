@@ -81,10 +81,11 @@ regenerate_example() {
     log_info "$name regenerated"
 }
 
-# Regenerate all examples
 log_info "=== Regenerating Examples ==="
-regenerate_example "$ROOT_DIR/examples/editions/tasks" "editions/tasks"
-regenerate_example "$ROOT_DIR/examples/proto3/products" "proto3/products"
+while IFS= read -r dir; do
+    name="${dir#$ROOT_DIR/}"
+    regenerate_example "$dir" "$name"
+done < <(find "$ROOT_DIR/examples" -name "buf.gen.yaml" -exec dirname {} \;)
 
 # Step 4: Run tests
 if [[ "$SKIP_TEST" == false ]]; then
@@ -99,22 +100,26 @@ if [[ "$SKIP_TEST" == false ]]; then
         exit 1
     fi
 
-    # Run examples tests
-    log_info "Testing examples/editions/tasks..."
-    if (cd "$ROOT_DIR/examples/editions/tasks" && go test ./... -count=1); then
-        log_info "editions/tasks tests passed"
-    else
-        log_error "editions/tasks tests failed"
-        exit 1
-    fi
+    while IFS= read -r dir; do
+        name="${dir#$ROOT_DIR/}"
+        log_info "Testing $name..."
+        if (cd "$dir" && go test ./... -count=1); then
+            log_info "$name tests passed"
+        else
+            log_error "$name tests failed"
+            exit 1
+        fi
+    done < <(find "$ROOT_DIR/examples" -name "go.mod" -exec dirname {} \;)
 
     # Run all tests in tests/ module
-    log_info "Testing tests/ module..."
-    if (cd "$ROOT_DIR/tests" && go test ./... -count=1); then
-        log_info "tests/ module tests passed"
-    else
-        log_error "tests/ module tests failed"
-        exit 1
+    if [[ -d "$ROOT_DIR/tests" ]]; then
+        log_info "Testing tests/ module..."
+        if (cd "$ROOT_DIR/tests" && go test ./... -count=1); then
+            log_info "tests/ module tests passed"
+        else
+            log_error "tests/ module tests failed"
+            exit 1
+        fi
     fi
 
     log_info "All tests passed"
