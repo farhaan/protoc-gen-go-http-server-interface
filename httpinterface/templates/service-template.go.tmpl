@@ -49,8 +49,9 @@ func Register{{ $method.Name }}Route(r Routes, handler {{ $.Name }}Handler, midd
 	if handler == nil {
 		return ErrNilHandler
 	}
+	h := applyMiddlewares(http.HandlerFunc(handler.Handle{{ $method.Name }}), middlewares)
 {{- range $method.HTTPRules }}
-	r.HandleFunc({{ httpMethod .Method }}, "{{ .Pattern }}", handler.Handle{{ $method.Name }}, middlewares...)
+	r.HandleFunc({{ httpMethod .Method }}, "{{ .Pattern }}", h.ServeHTTP)
 {{- end }}
 	return nil
 }

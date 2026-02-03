@@ -740,9 +740,9 @@ func TestTemplateExecution(t *testing.T) {
 		t.Error("Generated code doesn't contain DefaultRouter function")
 	}
 
-	// Check for proper middleware chaining
-	if !strings.Contains(code, "Apply route-specific middlewares first") {
-		t.Error("Generated code doesn't have proper middleware ordering comments")
+	// Check for applyMiddlewares helper
+	if !strings.Contains(code, "func applyMiddlewares") {
+		t.Error("Generated code doesn't contain applyMiddlewares helper")
 	}
 }
 

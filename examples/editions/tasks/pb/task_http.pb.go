@@ -11,9 +11,11 @@ import (
 type Middleware func(http.Handler) http.Handler
 
 // Routes defines the minimal interface for route registration.
+// This interface is intentionally minimal to maximize compatibility with
+// standard library and third-party routers (chi, gorilla/mux, etc.).
 type Routes interface {
 	// HandleFunc registers a handler function for the given method and pattern.
-	HandleFunc(method, pattern string, handler http.HandlerFunc, middlewares ...Middleware)
+	HandleFunc(method, pattern string, handler http.HandlerFunc)
 }
 
 // Router extends Routes with grouping and middleware support.
@@ -85,9 +87,10 @@ func (g *RouteGroup) Use(middlewares ...Middleware) Router {
 }
 
 // HandleFunc registers a handler function for the given method and pattern.
-func (g *RouteGroup) HandleFunc(method, pattern string, handler http.HandlerFunc, middlewares ...Middleware) {
+// Group middlewares are automatically applied to the handler.
+func (g *RouteGroup) HandleFunc(method, pattern string, handler http.HandlerFunc) {
 	fullPattern := joinPath(g.prefix, pattern)
-	finalHandler := applyMiddlewares(handler, g.middlewares, middlewares)
+	finalHandler := applyMiddlewares(handler, g.middlewares)
 	routeKey := method + " " + fullPattern
 	g.mux.Handle(routeKey, finalHandler)
 	g.routes = append(g.routes, routeKey)
@@ -119,18 +122,11 @@ func appendMiddlewares(parent, additional []Middleware) []Middleware {
 	return result
 }
 
-// applyMiddlewares wraps handler with group and route-specific middlewares.
-func applyMiddlewares(handler http.Handler, groupMW, routeMW []Middleware) http.Handler {
-	// Apply route-specific middlewares first (innermost)
-	for i := len(routeMW) - 1; i >= 0; i-- {
-		if routeMW[i] != nil {
-			handler = routeMW[i](handler)
-		}
-	}
-	// Apply group middlewares (outermost)
-	for i := len(groupMW) - 1; i >= 0; i-- {
-		if groupMW[i] != nil {
-			handler = groupMW[i](handler)
+// applyMiddlewares wraps handler with the given middlewares (outermost first).
+func applyMiddlewares(handler http.Handler, middlewares []Middleware) http.Handler {
+	for i := len(middlewares) - 1; i >= 0; i-- {
+		if middlewares[i] != nil {
+			handler = middlewares[i](handler)
 		}
 	}
 	return handler
@@ -208,7 +204,8 @@ func RegisterCreateTaskRoute(r Routes, handler TaskServiceHandler, middlewares .
 	if handler == nil {
 		return ErrNilHandler
 	}
-	r.HandleFunc(http.MethodPost, "/api/v1/tasks", handler.HandleCreateTask, middlewares...)
+	h := applyMiddlewares(http.HandlerFunc(handler.HandleCreateTask), middlewares)
+	r.HandleFunc(http.MethodPost, "/api/v1/tasks", h.ServeHTTP)
 	return nil
 }
 
@@ -230,7 +227,8 @@ func RegisterGetTaskRoute(r Routes, handler TaskServiceHandler, middlewares ...M
 	if handler == nil {
 		return ErrNilHandler
 	}
-	r.HandleFunc(http.MethodGet, "/api/v1/tasks/{task_id}", handler.HandleGetTask, middlewares...)
+	h := applyMiddlewares(http.HandlerFunc(handler.HandleGetTask), middlewares)
+	r.HandleFunc(http.MethodGet, "/api/v1/tasks/{task_id}", h.ServeHTTP)
 	return nil
 }
 
@@ -252,8 +250,9 @@ func RegisterUpdateTaskRoute(r Routes, handler TaskServiceHandler, middlewares .
 	if handler == nil {
 		return ErrNilHandler
 	}
-	r.HandleFunc(http.MethodPut, "/api/v1/tasks/{task_id}", handler.HandleUpdateTask, middlewares...)
-	r.HandleFunc(http.MethodPatch, "/api/v1/tasks/{task_id}", handler.HandleUpdateTask, middlewares...)
+	h := applyMiddlewares(http.HandlerFunc(handler.HandleUpdateTask), middlewares)
+	r.HandleFunc(http.MethodPut, "/api/v1/tasks/{task_id}", h.ServeHTTP)
+	r.HandleFunc(http.MethodPatch, "/api/v1/tasks/{task_id}", h.ServeHTTP)
 	return nil
 }
 
@@ -275,7 +274,8 @@ func RegisterDeleteTaskRoute(r Routes, handler TaskServiceHandler, middlewares .
 	if handler == nil {
 		return ErrNilHandler
 	}
-	r.HandleFunc(http.MethodDelete, "/api/v1/tasks/{task_id}", handler.HandleDeleteTask, middlewares...)
+	h := applyMiddlewares(http.HandlerFunc(handler.HandleDeleteTask), middlewares)
+	r.HandleFunc(http.MethodDelete, "/api/v1/tasks/{task_id}", h.ServeHTTP)
 	return nil
 }
 
@@ -297,7 +297,8 @@ func RegisterListTasksRoute(r Routes, handler TaskServiceHandler, middlewares ..
 	if handler == nil {
 		return ErrNilHandler
 	}
-	r.HandleFunc(http.MethodGet, "/api/v1/tasks", handler.HandleListTasks, middlewares...)
+	h := applyMiddlewares(http.HandlerFunc(handler.HandleListTasks), middlewares)
+	r.HandleFunc(http.MethodGet, "/api/v1/tasks", h.ServeHTTP)
 	return nil
 }
 
@@ -319,7 +320,8 @@ func RegisterCompleteTaskRoute(r Routes, handler TaskServiceHandler, middlewares
 	if handler == nil {
 		return ErrNilHandler
 	}
-	r.HandleFunc(http.MethodPost, "/api/v1/tasks/{task_id}/complete", handler.HandleCompleteTask, middlewares...)
+	h := applyMiddlewares(http.HandlerFunc(handler.HandleCompleteTask), middlewares)
+	r.HandleFunc(http.MethodPost, "/api/v1/tasks/{task_id}/complete", h.ServeHTTP)
 	return nil
 }
 
@@ -341,7 +343,8 @@ func RegisterGetTasksByProjectRoute(r Routes, handler TaskServiceHandler, middle
 	if handler == nil {
 		return ErrNilHandler
 	}
-	r.HandleFunc(http.MethodGet, "/api/v1/projects/{project_id}/tasks", handler.HandleGetTasksByProject, middlewares...)
+	h := applyMiddlewares(http.HandlerFunc(handler.HandleGetTasksByProject), middlewares)
+	r.HandleFunc(http.MethodGet, "/api/v1/projects/{project_id}/tasks", h.ServeHTTP)
 	return nil
 }
 
@@ -363,7 +366,8 @@ func RegisterAssignTaskRoute(r Routes, handler TaskServiceHandler, middlewares .
 	if handler == nil {
 		return ErrNilHandler
 	}
-	r.HandleFunc(http.MethodPost, "/api/v1/projects/{project_id}/tasks/{task_id}/assign/{user_id}", handler.HandleAssignTask, middlewares...)
+	h := applyMiddlewares(http.HandlerFunc(handler.HandleAssignTask), middlewares)
+	r.HandleFunc(http.MethodPost, "/api/v1/projects/{project_id}/tasks/{task_id}/assign/{user_id}", h.ServeHTTP)
 	return nil
 }
 
