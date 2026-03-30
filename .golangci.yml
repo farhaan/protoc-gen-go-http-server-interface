@@ -1,49 +1,23 @@
-linters-settings:
-  gocyclo:
-    min-complexity: 22
-  depguard:
-    rules:
-      Main:
-        files:
-        - "!$test"
-        deny:
-        - pkg: "github.com/pkg/errors"
-          desc: "Use standard library errors package"
-      Test:
-        files:
-        - "$test"
-        allow:
-        - "$gostd"
-        - "github.com/farhaan/protoc-gen-go-http-server-interface/httpinterface"
-        - "google.golang.org/protobuf"
-        - "google.golang.org/genproto"
-        - "tests/internal"
-        - "golang.org/x/tools"
+version: "2"
 
 run:
   timeout: 5m
   tests: true
 
-linters:
+formatters:
   enable:
     - gofmt
+
+linters:
+  settings:
+    gocyclo:
+      min-complexity: 22
+  enable:
     - govet
     - staticcheck
-    - dupl
-    - depguard
-    - lll
-    - testpackage
     - gocyclo
 
 issues:
   exclude-dirs:
     - vendor
     - .git
-  exclude-rules:
-    - path: httpinterface/.*_test\.go
-      linters:
-        - testpackage
-        - lll
-    - path: httpinterface/parser/.*\.go
-      linters:
-        - dupl

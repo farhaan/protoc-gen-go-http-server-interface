@@ -29,9 +29,9 @@ func FuzzGenerateCode(f *testing.F) {
 		{"pkg", "S", "M", "/", "GET"},
 		{"p", "A", "B", "/path/with/{nested}/{params}", "POST"},
 		// Previously failing inputs — now handled correctly:
-		{"A", "A", "A", "0", "0"},        // digit-only method (custom) — now strconv.Quote'd
-		{"A", "A", "A", `"`, "GET"},      // quote in pattern — now goQuote'd
-		{"A", "A", "A", `\path`, "GET"},  // backslash in pattern — now goQuote'd
+		{"A", "A", "A", "0", "0"},       // digit-only method (custom) — now strconv.Quote'd
+		{"A", "A", "A", `"`, "GET"},     // quote in pattern — now goQuote'd
+		{"A", "A", "A", `\path`, "GET"}, // backslash in pattern — now goQuote'd
 	}
 
 	for _, s := range seeds {
@@ -68,7 +68,8 @@ func FuzzGenerateCode(f *testing.F) {
 		// Property 2: if no error, the output must be parseable Go.
 		fset := token.NewFileSet()
 		if _, parseErr := goparser.ParseFile(fset, "", generated, goparser.AllErrors); parseErr != nil {
-			t.Errorf("GenerateCode produced unparseable Go for pkg=%q svc=%q method=%q pattern=%q httpMethod=%q:\n%v\n\nCode:\n%s",
+			t.Errorf(
+				"GenerateCode produced unparseable Go for pkg=%q svc=%q method=%q pattern=%q httpMethod=%q:\n%v\n\nCode:\n%s",
 				pkgName, svcName, methodName, pattern, httpMethod, parseErr, generated)
 		}
 	})

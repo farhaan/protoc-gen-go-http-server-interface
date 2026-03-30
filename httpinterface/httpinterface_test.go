@@ -872,7 +872,8 @@ func TestParseOptions(t *testing.T) {
 			}
 
 			if opts.PathsSourceRelative != tt.wantRelative {
-				t.Errorf("ParseOptions(%q) PathsSourceRelative = %v, want %v", tt.parameter, opts.PathsSourceRelative, tt.wantRelative)
+				t.Errorf("ParseOptions(%q) PathsSourceRelative = %v, want %v",
+					tt.parameter, opts.PathsSourceRelative, tt.wantRelative)
 			}
 
 			if opts.OutputPrefix != tt.wantPrefix {
