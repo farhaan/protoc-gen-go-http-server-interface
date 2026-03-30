@@ -14,8 +14,11 @@ import (
 	service "github.com/farhaan/protoc-gen-go-http-server-interface/examples/proto3/products/service/product"
 )
 
-// ProductHandler implements the HTTP handlers for the Product service
+// ProductHandler implements the HTTP handlers for the Product service.
+// Embedding pb.UnimplementedProductServiceHandler ensures new RPCs added to the
+// proto will not cause compile errors until they are explicitly implemented.
 type ProductHandler struct {
+	pb.UnimplementedProductServiceHandler
 	service *service.ProductService
 }
 

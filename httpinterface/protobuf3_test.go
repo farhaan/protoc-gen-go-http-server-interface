@@ -297,11 +297,6 @@ func TestGeneratedCodePatterns(t *testing.T) {
 
 		// Router functions
 		"func NewRouter(mux *http.ServeMux)",
-		"func DefaultRouter()",
-
-		// RouteGroup methods
-		"func (g *RouteGroup) RegisterGetUser",
-		"func (g *RouteGroup) RegisterCreateUser",
 
 		// HTTP method handling
 		"http.MethodGet",

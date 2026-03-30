@@ -1,9 +1,37 @@
 // {{ .Name }}Handler is the interface for {{ .Name }} HTTP handlers.
+// Implement this interface to handle HTTP requests for {{ .Name }}.
+//
+// Embed Unimplemented{{ .Name }}Handler to forward-compatibly implement this interface:
+// new RPCs added to the proto will not cause compile errors in your handler.
 type {{ .Name }}Handler interface {
 {{- range .Methods }}
-	Handle{{ .Name }}(w http.ResponseWriter, r *http.Request)
+{{- $method := . }}
+{{ if $method.HTTPRules }}{{- $first := index $method.HTTPRules 0 }}	// Handle{{ $method.Name }} handles{{ range $i, $rule := $method.HTTPRules }}{{ if gt $i 0 }},{{ end }} {{ $rule.Method }} {{ $rule.Pattern }}{{ end }}.
+{{ if $first.PathParams }}	// Path params (stdlib): {{ range $i, $p := $first.PathParams }}{{ if gt $i 0 }}, {{ end }}r.PathValue("{{ $p }}"){{ end }}
+	// In tests: use req.SetPathValue("param_name", value) for each path param (Go 1.22+).
+	// Router-specific: chi.URLParam(r, "param") | mux.Vars(r)["param"]
+{{ end }}{{ end }}	Handle{{ $method.Name }}(w http.ResponseWriter, r *http.Request)
 {{- end }}
 }
+
+// Unimplemented{{ .Name }}Handler provides default 501 Not Implemented stubs.
+// Embed this struct in your handler to forward-compatibly implement {{ .Name }}Handler.
+// When new RPC methods are added to the proto, embedding this prevents compile errors.
+//
+// Example:
+//
+//	type My{{ .Name }}Handler struct {
+//	    pb.Unimplemented{{ .Name }}Handler
+//	    // your fields...
+//	}
+type Unimplemented{{ .Name }}Handler struct{}
+{{- range .Methods }}
+
+// Handle{{ .Name }} returns 501 Not Implemented for {{ .Name }}.
+func (Unimplemented{{ $.Name }}Handler) Handle{{ .Name }}(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented: {{ .Name }}", http.StatusNotImplemented)
+}
+{{- end }}
 
 // Register{{ .Name }}Routes registers HTTP routes for {{ .Name }}.
 // Returns an error if router or handler is nil.
@@ -16,7 +44,7 @@ func Register{{ .Name }}Routes(r Routes, handler {{ .Name }}Handler) error {
 	}
 {{- range $method := .Methods }}
 {{- range $method.HTTPRules }}
-	r.HandleFunc({{ httpMethod .Method }}, "{{ .Pattern }}", handler.Handle{{ $method.Name }})
+	r.HandleFunc({{ httpMethod .Method }}, {{ goQuote .Pattern }}, handler.Handle{{ $method.Name }})
 {{- end }}
 {{- end }}
 	return nil
@@ -30,13 +58,6 @@ func MustRegister{{ .Name }}Routes(r Routes, handler {{ .Name }}Handler) {
 	}
 }
 
-// Register{{ .Name }}Routes is a convenience method on RouteGroup.
-//
-// Deprecated: Use Register{{ .Name }}Routes(router, handler) instead.
-// This method does not return errors and will not work with Router interface from Group().
-func (g *RouteGroup) Register{{ .Name }}Routes(handler {{ .Name }}Handler) {
-	_ = Register{{ .Name }}Routes(g, handler)
-}
 {{- range $method := .Methods }}
 
 // Register{{ $method.Name }}Route registers the {{ $method.Name }} handler.
@@ -51,16 +72,8 @@ func Register{{ $method.Name }}Route(r Routes, handler {{ $.Name }}Handler, midd
 	}
 	h := applyMiddlewares(http.HandlerFunc(handler.Handle{{ $method.Name }}), middlewares)
 {{- range $method.HTTPRules }}
-	r.HandleFunc({{ httpMethod .Method }}, "{{ .Pattern }}", h.ServeHTTP)
+	r.HandleFunc({{ httpMethod .Method }}, {{ goQuote .Pattern }}, h.ServeHTTP)
 {{- end }}
 	return nil
-}
-
-// Register{{ $method.Name }} is a convenience method on RouteGroup.
-//
-// Deprecated: Use Register{{ $method.Name }}Route(router, handler, middlewares...) instead.
-// This method does not return errors and will not work with Router interface from Group().
-func (g *RouteGroup) Register{{ $method.Name }}(handler {{ $.Name }}Handler, middlewares ...Middleware) {
-	_ = Register{{ $method.Name }}Route(g, handler, middlewares...)
 }
 {{- end }}

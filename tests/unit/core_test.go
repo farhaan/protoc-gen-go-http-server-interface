@@ -380,3 +380,207 @@ func TestCore_EmptyGeneration(t *testing.T) {
 		})
 	}
 }
+
+// TestCore_UnimplementedHandler tests that UnimplementedXxxHandler is generated
+func TestCore_UnimplementedHandler(t *testing.T) {
+	t.Parallel()
+	generator := httpinterface.New()
+
+	serviceData := &httpinterface.ServiceData{
+		PackageName: "testpkg",
+		Services: []httpinterface.ServiceInfo{
+			{
+				Name: "EchoService",
+				Methods: []httpinterface.MethodInfo{
+					{
+						Name: "Echo",
+						HTTPRules: []parser.HTTPRule{
+							{Method: "POST", Pattern: "/echo", Body: "*"},
+						},
+					},
+					{
+						Name: "EchoStream",
+						HTTPRules: []parser.HTTPRule{
+							{Method: "GET", Pattern: "/echo/stream"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	generated, err := generator.GenerateCode(serviceData)
+	if err != nil {
+		t.Fatalf("Code generation failed: %v", err)
+	}
+
+	expectedPatterns := []string{
+		// Unimplemented struct declaration
+		"type UnimplementedEchoServiceHandler struct{}",
+		// Embed hint in interface doc comment
+		"Embed UnimplementedEchoServiceHandler",
+		// One stub per method
+		"func (UnimplementedEchoServiceHandler) HandleEcho(w http.ResponseWriter, r *http.Request)",
+		"func (UnimplementedEchoServiceHandler) HandleEchoStream(w http.ResponseWriter, r *http.Request)",
+		// Stub body
+		`http.Error(w, "not implemented: Echo", http.StatusNotImplemented)`,
+		`http.Error(w, "not implemented: EchoStream", http.StatusNotImplemented)`,
+	}
+
+	for _, pattern := range expectedPatterns {
+		if !strings.Contains(generated, pattern) {
+			t.Errorf("Generated code missing expected pattern: %q", pattern)
+		}
+	}
+}
+
+// TestCore_PathParamDocComments tests that Handle* methods have path param doc comments
+func TestCore_PathParamDocComments(t *testing.T) {
+	t.Parallel()
+	generator := httpinterface.New()
+
+	serviceData := &httpinterface.ServiceData{
+		PackageName: "testpkg",
+		Services: []httpinterface.ServiceInfo{
+			{
+				Name: "ResourceService",
+				Methods: []httpinterface.MethodInfo{
+					{
+						Name: "GetResource",
+						HTTPRules: []parser.HTTPRule{
+							{Method: "GET", Pattern: "/resources/{resource_id}", PathParams: []string{"resource_id"}},
+						},
+					},
+					{
+						Name: "CreateResource",
+						HTTPRules: []parser.HTTPRule{
+							{Method: "POST", Pattern: "/resources", Body: "*"},
+						},
+					},
+					{
+						Name: "AssignResource",
+						HTTPRules: []parser.HTTPRule{
+							{
+								Method:     "POST",
+								Pattern:    "/orgs/{org_id}/resources/{resource_id}/assign/{user_id}",
+								PathParams: []string{"org_id", "resource_id", "user_id"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	generated, err := generator.GenerateCode(serviceData)
+	if err != nil {
+		t.Fatalf("Code generation failed: %v", err)
+	}
+
+	expectedPatterns := []string{
+		// Single path param
+		`// HandleGetResource handles GET /resources/{resource_id}.`,
+		`r.PathValue("resource_id")`,
+		// No path param comment for no-param methods
+		`// HandleCreateResource handles POST /resources.`,
+		// Multiple path params on one line
+		`r.PathValue("org_id"), r.PathValue("resource_id"), r.PathValue("user_id")`,
+		// Test hint present for methods with params
+		"In tests: use req.SetPathValue",
+		// Router-specific hint
+		`chi.URLParam(r, "param")`,
+	}
+
+	for _, pattern := range expectedPatterns {
+		if !strings.Contains(generated, pattern) {
+			t.Errorf("Generated code missing expected pattern: %q", pattern)
+		}
+	}
+
+	// Method with no path params should NOT have path param comment
+	if strings.Contains(generated, `// HandleCreateResource handles POST /resources.
+	// Path params`) {
+		t.Error("CreateResource (no path params) should not have a Path params comment")
+	}
+}
+
+// TestCore_ResponseWriterWrapper tests that ResponseWriterWrapper is generated
+func TestCore_ResponseWriterWrapper(t *testing.T) {
+	t.Parallel()
+	generator := httpinterface.New()
+
+	serviceData := &httpinterface.ServiceData{
+		PackageName: "testpkg",
+		Services: []httpinterface.ServiceInfo{
+			{
+				Name: "PingService",
+				Methods: []httpinterface.MethodInfo{
+					{
+						Name: "Ping",
+						HTTPRules: []parser.HTTPRule{
+							{Method: "GET", Pattern: "/ping"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	generated, err := generator.GenerateCode(serviceData)
+	if err != nil {
+		t.Fatalf("Code generation failed: %v", err)
+	}
+
+	expectedPatterns := []string{
+		"type ResponseWriterWrapper struct",
+		"StatusCode int",
+		"func NewResponseWriterWrapper(w http.ResponseWriter) *ResponseWriterWrapper",
+		"func (rw *ResponseWriterWrapper) WriteHeader(code int)",
+		"func (rw *ResponseWriterWrapper) Flush()",
+		"http.Flusher",
+	}
+
+	for _, pattern := range expectedPatterns {
+		if !strings.Contains(generated, pattern) {
+			t.Errorf("Generated code missing expected pattern: %q", pattern)
+		}
+	}
+}
+
+// TestCore_DispatchTimeMiddleware tests that middleware applied after route registration
+// is still invoked when requests arrive (dispatch-time, not registration-time)
+func TestCore_DispatchTimeMiddleware(t *testing.T) {
+	t.Parallel()
+
+	serviceData := &httpinterface.ServiceData{
+		PackageName: "testpkg",
+		Services: []httpinterface.ServiceInfo{
+			{
+				Name: "PingService",
+				Methods: []httpinterface.MethodInfo{
+					{
+						Name: "Ping",
+						HTTPRules: []parser.HTTPRule{
+							{Method: "GET", Pattern: "/ping"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	generated, err := httpinterface.New().GenerateCode(serviceData)
+	if err != nil {
+		t.Fatalf("Code generation failed: %v", err)
+	}
+
+	// The generated HandleFunc must capture the group by pointer so that
+	// middlewares added after registration are observed at dispatch time.
+	if !strings.Contains(generated, "group := g") {
+		t.Error("HandleFunc must capture group by pointer for dispatch-time middleware")
+	}
+	// collectMiddlewareChain(group) walks the ancestor chain at dispatch time.
+	if !strings.Contains(generated, "collectMiddlewareChain(group)") {
+		t.Error("HandleFunc must read middleware chain at dispatch time via collectMiddlewareChain")
+	}
+}

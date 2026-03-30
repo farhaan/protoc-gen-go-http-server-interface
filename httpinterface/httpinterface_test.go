@@ -241,9 +241,7 @@ func TestGenerateCode(t *testing.T) {
 		"type TestServiceHandler interface",
 		"HandleGetItem",
 		"func RegisterGetItemRoute",
-		// Check for updated content related to the new ServeMux parameter
 		"func NewRouter(mux *http.ServeMux)",
-		"func DefaultRouter()",
 	}
 
 	for _, expected := range expectedContents {
@@ -286,9 +284,8 @@ func TestOutputFilename(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			g := New()
-			g.Options = tt.options
 
-			got := g.getOutputFilename(tt.protoFilename)
+			got := g.getOutputFilename(tt.protoFilename, tt.options)
 			if got != tt.want {
 				t.Errorf("getOutputFilename(%q) = %q, want %q", tt.protoFilename, got, tt.want)
 			}
@@ -571,9 +568,7 @@ func TestGenerate(t *testing.T) {
 		"package test",
 		"type TestServiceHandler interface",
 		"HandleMethodWithHTTP",
-		// Check for new shared mux-related content
 		"func NewRouter(mux *http.ServeMux)",
-		"func DefaultRouter()",
 	}
 
 	for _, expected := range expectedContents {
@@ -727,17 +722,9 @@ func TestTemplateExecution(t *testing.T) {
 		t.Error("Generated code doesn't contain RegisterEchoRoute function")
 	}
 
-	if !strings.Contains(code, "func (g *RouteGroup) RegisterEcho(handler EchoServiceHandler, middlewares ...Middleware)") {
-		t.Error("Generated code doesn't contain RouteGroup.RegisterEcho method")
-	}
-
 	// Check for new shared mux constructor
 	if !strings.Contains(code, "func NewRouter(mux *http.ServeMux)") {
 		t.Error("Generated code doesn't contain NewRouter function with mux parameter")
-	}
-
-	if !strings.Contains(code, "func DefaultRouter()") {
-		t.Error("Generated code doesn't contain DefaultRouter function")
 	}
 
 	// Check for applyMiddlewares helper
@@ -1070,7 +1057,6 @@ func TestGenerateCodeMultipleBindingsNoDuplicates(t *testing.T) {
 	// Count function declarations - should only appear once each
 	funcDeclarations := []string{
 		"func RegisterUpdateResourceRoute",
-		"func (g *RouteGroup) RegisterUpdateResource",
 	}
 
 	for _, funcDecl := range funcDeclarations {

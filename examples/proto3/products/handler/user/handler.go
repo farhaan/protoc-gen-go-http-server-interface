@@ -14,8 +14,11 @@ import (
 	service "github.com/farhaan/protoc-gen-go-http-server-interface/examples/proto3/products/service/user"
 )
 
-// UserHandler implements the HTTP handlers for the User service
+// UserHandler implements the HTTP handlers for the User service.
+// Embedding pb.UnimplementedUserServiceHandler ensures new RPCs added to the
+// proto will not cause compile errors until they are explicitly implemented.
 type UserHandler struct {
+	pb.UnimplementedUserServiceHandler
 	service *service.UserService
 }
 
