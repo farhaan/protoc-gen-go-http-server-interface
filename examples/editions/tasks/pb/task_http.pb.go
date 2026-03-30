@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 // Middleware represents a middleware function that wraps an http.Handler.
@@ -13,6 +15,10 @@ type Middleware func(http.Handler) http.Handler
 // Routes defines the minimal interface for route registration.
 // This interface is intentionally minimal to maximize compatibility with
 // standard library and third-party routers (chi, gorilla/mux, etc.).
+//
+// Stability: this interface is stable. New methods will not be added without a
+// major version bump, so third-party implementations (custom routers) will not
+// silently break across minor releases.
 type Routes interface {
 	// HandleFunc registers a handler function for the given method and pattern.
 	HandleFunc(method, pattern string, handler http.HandlerFunc)
@@ -27,11 +33,21 @@ type Router interface {
 	Use(middlewares ...Middleware) Router
 }
 
+// compiledRoute is a cached middleware chain for a single route.
+// It is rebuilt only when the group's version changes (i.e., after Use() is called).
+type compiledRoute struct {
+	ver   uint64
+	chain http.Handler
+}
+
 // RouteGroup implements Router using http.ServeMux.
 type RouteGroup struct {
 	mux         *http.ServeMux
 	prefix      string
+	parent      *RouteGroup
+	mu          sync.RWMutex
 	middlewares []Middleware
+	version     atomic.Uint64
 	routes      []string
 }
 
@@ -42,10 +58,8 @@ func NewRouter(mux *http.ServeMux) *RouteGroup {
 		mux = http.NewServeMux()
 	}
 	return &RouteGroup{
-		mux:         mux,
-		prefix:      "",
-		middlewares: nil,
-		routes:      []string{},
+		mux:    mux,
+		routes: []string{},
 	}
 }
 
@@ -65,35 +79,83 @@ func joinPath(base, path string) string {
 	return strings.TrimSuffix(base, "/") + "/" + strings.TrimPrefix(path, "/")
 }
 
-// Group creates a new RouteGroup with the given prefix and optional middlewares.
+// effectiveVersion returns the sum of this group's version and all ancestor
+// versions. Any Use() call anywhere in the ancestor chain invalidates the cache.
+func (g *RouteGroup) effectiveVersion() uint64 {
+	ver := g.version.Load()
+	if g.parent != nil {
+		ver += g.parent.effectiveVersion()
+	}
+	return ver
+}
+
+// collectMiddlewareChain returns all middlewares from the root down to g,
+// preserving the outermost-first ordering.
+func collectMiddlewareChain(g *RouteGroup) []Middleware {
+	var chain []Middleware
+	if g.parent != nil {
+		chain = collectMiddlewareChain(g.parent)
+	}
+	g.mu.RLock()
+	chain = append(chain, g.middlewares...)
+	g.mu.RUnlock()
+	return chain
+}
+
+// Group creates a child RouteGroup with the given prefix.
+// The child inherits the parent's middleware chain at dispatch time,
+// so Use() calls on the parent after Group() are visible to child routes.
+// Middlewares passed to Group() are added to the child only.
 func (g *RouteGroup) Group(prefix string, middlewares ...Middleware) Router {
-	// Ensure prefix starts with /
 	if prefix != "" && !strings.HasPrefix(prefix, "/") {
 		prefix = "/" + prefix
 	}
-
-	return &RouteGroup{
-		mux:         g.mux,
-		prefix:      joinPath(g.prefix, prefix),
-		middlewares: appendMiddlewares(g.middlewares, middlewares),
-		routes:      []string{},
+	child := &RouteGroup{
+		mux:    g.mux,
+		prefix: joinPath(g.prefix, prefix),
+		parent: g,
+		routes: []string{},
 	}
+	if len(middlewares) > 0 {
+		child.middlewares = appendMiddlewares(nil, middlewares)
+	}
+	return child
 }
 
-// Use appends middlewares to all routes registered after this call.
+// Use appends middlewares to all routes in this group.
+// Middlewares added after HandleFunc are applied at request dispatch time —
+// existing routes pick them up on the next request.
 func (g *RouteGroup) Use(middlewares ...Middleware) Router {
+	g.mu.Lock()
 	g.middlewares = appendMiddlewares(g.middlewares, middlewares)
+	g.version.Add(1) // bumped inside the lock so the version increment is visible
+	g.mu.Unlock()    // atomically with the middleware append
 	return g
 }
 
 // HandleFunc registers a handler function for the given method and pattern.
-// Group middlewares are automatically applied to the handler.
+// All ancestor and group middlewares are applied at request dispatch time,
+// compiled once per effective version and cached atomically.
+// In steady state (no new Use() calls) each request incurs zero allocations
+// for middleware wrapping.
 func (g *RouteGroup) HandleFunc(method, pattern string, handler http.HandlerFunc) {
 	fullPattern := joinPath(g.prefix, pattern)
-	finalHandler := applyMiddlewares(handler, g.middlewares)
 	routeKey := method + " " + fullPattern
-	g.mux.Handle(routeKey, finalHandler)
+	group := g
+	var cache atomic.Pointer[compiledRoute]
+	g.mux.Handle(routeKey, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ver := group.effectiveVersion()
+		if c := cache.Load(); c != nil && c.ver == ver {
+			c.chain.ServeHTTP(w, r)
+			return
+		}
+		chain := applyMiddlewares(handler, collectMiddlewareChain(group))
+		cache.Store(&compiledRoute{ver: ver, chain: chain})
+		chain.ServeHTTP(w, r)
+	}))
+	g.mu.Lock()
 	g.routes = append(g.routes, routeKey)
+	g.mu.Unlock()
 }
 
 // GetRoutes returns all registered routes for this group.
@@ -132,29 +194,158 @@ func applyMiddlewares(handler http.Handler, middlewares []Middleware) http.Handl
 	return handler
 }
 
+// ResponseWriterWrapper wraps http.ResponseWriter to capture the HTTP status code
+// and safely forward http.Flusher calls to the underlying writer.
+//
+// Use this in logging or tracing middleware instead of a plain struct embedding,
+// to avoid breaking SSE handlers that type-assert for http.Flusher.
+//
+// For WebSocket (http.Hijacker) support, use http.NewResponseController(w)
+// from the standard library (Go 1.20+).
+//
+// Example:
+//
+//	func Logger() Middleware {
+//	    return func(next http.Handler) http.Handler {
+//	        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+//	            rw := NewResponseWriterWrapper(w)
+//	            next.ServeHTTP(rw, r)
+//	            log.Printf("%s %s %d", r.Method, r.URL.Path, rw.StatusCode)
+//	        })
+//	    }
+//	}
+type ResponseWriterWrapper struct {
+	http.ResponseWriter
+	// StatusCode is the HTTP status code written by the handler.
+	// Defaults to 200 if WriteHeader was never called.
+	StatusCode int
+}
+
+// NewResponseWriterWrapper returns a ResponseWriterWrapper around w.
+func NewResponseWriterWrapper(w http.ResponseWriter) *ResponseWriterWrapper {
+	return &ResponseWriterWrapper{ResponseWriter: w, StatusCode: http.StatusOK}
+}
+
+// WriteHeader captures the status code and delegates to the underlying writer.
+func (rw *ResponseWriterWrapper) WriteHeader(code int) {
+	rw.StatusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+// Flush forwards to the underlying http.Flusher if supported.
+// This preserves SSE and streaming handler functionality when wrapped.
+func (rw *ResponseWriterWrapper) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // ErrNilRouter is returned when a nil router is passed to a register function.
 var ErrNilRouter = errors.New("protogen: router is nil")
 
 // ErrNilHandler is returned when a nil handler is passed to a register function.
 var ErrNilHandler = errors.New("protogen: handler is nil")
 
-// DefaultRouter creates a new router with a new ServeMux.
-//
-// Deprecated: Use NewRouter(nil) instead.
-func DefaultRouter() *RouteGroup {
-	return NewRouter(nil)
-}
+// Compile-time assertions: RouteGroup must satisfy both interfaces.
+// If either interface gains a method that RouteGroup does not implement,
+// the generated file will fail to compile, surfacing the break immediately.
+var (
+	_ Routes = (*RouteGroup)(nil)
+	_ Router = (*RouteGroup)(nil)
+)
 
 // TaskServiceHandler is the interface for TaskService HTTP handlers.
+// Implement this interface to handle HTTP requests for TaskService.
+//
+// Embed UnimplementedTaskServiceHandler to forward-compatibly implement this interface:
+// new RPCs added to the proto will not cause compile errors in your handler.
 type TaskServiceHandler interface {
+	// HandleCreateTask handles POST /api/v1/tasks.
 	HandleCreateTask(w http.ResponseWriter, r *http.Request)
+	// HandleGetTask handles GET /api/v1/tasks/{task_id}.
+	// Path params (stdlib): r.PathValue("task_id")
+	// In tests: use req.SetPathValue("param_name", value) for each path param (Go 1.22+).
+	// Router-specific: chi.URLParam(r, "param") | mux.Vars(r)["param"]
 	HandleGetTask(w http.ResponseWriter, r *http.Request)
+	// HandleUpdateTask handles PUT /api/v1/tasks/{task_id}, PATCH /api/v1/tasks/{task_id}.
+	// Path params (stdlib): r.PathValue("task_id")
+	// In tests: use req.SetPathValue("param_name", value) for each path param (Go 1.22+).
+	// Router-specific: chi.URLParam(r, "param") | mux.Vars(r)["param"]
 	HandleUpdateTask(w http.ResponseWriter, r *http.Request)
+	// HandleDeleteTask handles DELETE /api/v1/tasks/{task_id}.
+	// Path params (stdlib): r.PathValue("task_id")
+	// In tests: use req.SetPathValue("param_name", value) for each path param (Go 1.22+).
+	// Router-specific: chi.URLParam(r, "param") | mux.Vars(r)["param"]
 	HandleDeleteTask(w http.ResponseWriter, r *http.Request)
+	// HandleListTasks handles GET /api/v1/tasks.
 	HandleListTasks(w http.ResponseWriter, r *http.Request)
+	// HandleCompleteTask handles POST /api/v1/tasks/{task_id}/complete.
+	// Path params (stdlib): r.PathValue("task_id")
+	// In tests: use req.SetPathValue("param_name", value) for each path param (Go 1.22+).
+	// Router-specific: chi.URLParam(r, "param") | mux.Vars(r)["param"]
 	HandleCompleteTask(w http.ResponseWriter, r *http.Request)
+	// HandleGetTasksByProject handles GET /api/v1/projects/{project_id}/tasks.
+	// Path params (stdlib): r.PathValue("project_id")
+	// In tests: use req.SetPathValue("param_name", value) for each path param (Go 1.22+).
+	// Router-specific: chi.URLParam(r, "param") | mux.Vars(r)["param"]
 	HandleGetTasksByProject(w http.ResponseWriter, r *http.Request)
+	// HandleAssignTask handles POST /api/v1/projects/{project_id}/tasks/{task_id}/assign/{user_id}.
+	// Path params (stdlib): r.PathValue("project_id"), r.PathValue("task_id"), r.PathValue("user_id")
+	// In tests: use req.SetPathValue("param_name", value) for each path param (Go 1.22+).
+	// Router-specific: chi.URLParam(r, "param") | mux.Vars(r)["param"]
 	HandleAssignTask(w http.ResponseWriter, r *http.Request)
+}
+
+// UnimplementedTaskServiceHandler provides default 501 Not Implemented stubs.
+// Embed this struct in your handler to forward-compatibly implement TaskServiceHandler.
+// When new RPC methods are added to the proto, embedding this prevents compile errors.
+//
+// Example:
+//
+//	type MyTaskServiceHandler struct {
+//	    pb.UnimplementedTaskServiceHandler
+//	    // your fields...
+//	}
+type UnimplementedTaskServiceHandler struct{}
+
+// HandleCreateTask returns 501 Not Implemented for CreateTask.
+func (UnimplementedTaskServiceHandler) HandleCreateTask(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented: CreateTask", http.StatusNotImplemented)
+}
+
+// HandleGetTask returns 501 Not Implemented for GetTask.
+func (UnimplementedTaskServiceHandler) HandleGetTask(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented: GetTask", http.StatusNotImplemented)
+}
+
+// HandleUpdateTask returns 501 Not Implemented for UpdateTask.
+func (UnimplementedTaskServiceHandler) HandleUpdateTask(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented: UpdateTask", http.StatusNotImplemented)
+}
+
+// HandleDeleteTask returns 501 Not Implemented for DeleteTask.
+func (UnimplementedTaskServiceHandler) HandleDeleteTask(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented: DeleteTask", http.StatusNotImplemented)
+}
+
+// HandleListTasks returns 501 Not Implemented for ListTasks.
+func (UnimplementedTaskServiceHandler) HandleListTasks(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented: ListTasks", http.StatusNotImplemented)
+}
+
+// HandleCompleteTask returns 501 Not Implemented for CompleteTask.
+func (UnimplementedTaskServiceHandler) HandleCompleteTask(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented: CompleteTask", http.StatusNotImplemented)
+}
+
+// HandleGetTasksByProject returns 501 Not Implemented for GetTasksByProject.
+func (UnimplementedTaskServiceHandler) HandleGetTasksByProject(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented: GetTasksByProject", http.StatusNotImplemented)
+}
+
+// HandleAssignTask returns 501 Not Implemented for AssignTask.
+func (UnimplementedTaskServiceHandler) HandleAssignTask(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented: AssignTask", http.StatusNotImplemented)
 }
 
 // RegisterTaskServiceRoutes registers HTTP routes for TaskService.
@@ -186,14 +377,6 @@ func MustRegisterTaskServiceRoutes(r Routes, handler TaskServiceHandler) {
 	}
 }
 
-// RegisterTaskServiceRoutes is a convenience method on RouteGroup.
-//
-// Deprecated: Use RegisterTaskServiceRoutes(router, handler) instead.
-// This method does not return errors and will not work with Router interface from Group().
-func (g *RouteGroup) RegisterTaskServiceRoutes(handler TaskServiceHandler) {
-	_ = RegisterTaskServiceRoutes(g, handler)
-}
-
 // RegisterCreateTaskRoute registers the CreateTask handler.
 // This registers all HTTP bindings for this method (1 binding(s)).
 // Returns an error if router or handler is nil.
@@ -209,14 +392,6 @@ func RegisterCreateTaskRoute(r Routes, handler TaskServiceHandler, middlewares .
 	return nil
 }
 
-// RegisterCreateTask is a convenience method on RouteGroup.
-//
-// Deprecated: Use RegisterCreateTaskRoute(router, handler, middlewares...) instead.
-// This method does not return errors and will not work with Router interface from Group().
-func (g *RouteGroup) RegisterCreateTask(handler TaskServiceHandler, middlewares ...Middleware) {
-	_ = RegisterCreateTaskRoute(g, handler, middlewares...)
-}
-
 // RegisterGetTaskRoute registers the GetTask handler.
 // This registers all HTTP bindings for this method (1 binding(s)).
 // Returns an error if router or handler is nil.
@@ -230,14 +405,6 @@ func RegisterGetTaskRoute(r Routes, handler TaskServiceHandler, middlewares ...M
 	h := applyMiddlewares(http.HandlerFunc(handler.HandleGetTask), middlewares)
 	r.HandleFunc(http.MethodGet, "/api/v1/tasks/{task_id}", h.ServeHTTP)
 	return nil
-}
-
-// RegisterGetTask is a convenience method on RouteGroup.
-//
-// Deprecated: Use RegisterGetTaskRoute(router, handler, middlewares...) instead.
-// This method does not return errors and will not work with Router interface from Group().
-func (g *RouteGroup) RegisterGetTask(handler TaskServiceHandler, middlewares ...Middleware) {
-	_ = RegisterGetTaskRoute(g, handler, middlewares...)
 }
 
 // RegisterUpdateTaskRoute registers the UpdateTask handler.
@@ -256,14 +423,6 @@ func RegisterUpdateTaskRoute(r Routes, handler TaskServiceHandler, middlewares .
 	return nil
 }
 
-// RegisterUpdateTask is a convenience method on RouteGroup.
-//
-// Deprecated: Use RegisterUpdateTaskRoute(router, handler, middlewares...) instead.
-// This method does not return errors and will not work with Router interface from Group().
-func (g *RouteGroup) RegisterUpdateTask(handler TaskServiceHandler, middlewares ...Middleware) {
-	_ = RegisterUpdateTaskRoute(g, handler, middlewares...)
-}
-
 // RegisterDeleteTaskRoute registers the DeleteTask handler.
 // This registers all HTTP bindings for this method (1 binding(s)).
 // Returns an error if router or handler is nil.
@@ -277,14 +436,6 @@ func RegisterDeleteTaskRoute(r Routes, handler TaskServiceHandler, middlewares .
 	h := applyMiddlewares(http.HandlerFunc(handler.HandleDeleteTask), middlewares)
 	r.HandleFunc(http.MethodDelete, "/api/v1/tasks/{task_id}", h.ServeHTTP)
 	return nil
-}
-
-// RegisterDeleteTask is a convenience method on RouteGroup.
-//
-// Deprecated: Use RegisterDeleteTaskRoute(router, handler, middlewares...) instead.
-// This method does not return errors and will not work with Router interface from Group().
-func (g *RouteGroup) RegisterDeleteTask(handler TaskServiceHandler, middlewares ...Middleware) {
-	_ = RegisterDeleteTaskRoute(g, handler, middlewares...)
 }
 
 // RegisterListTasksRoute registers the ListTasks handler.
@@ -302,14 +453,6 @@ func RegisterListTasksRoute(r Routes, handler TaskServiceHandler, middlewares ..
 	return nil
 }
 
-// RegisterListTasks is a convenience method on RouteGroup.
-//
-// Deprecated: Use RegisterListTasksRoute(router, handler, middlewares...) instead.
-// This method does not return errors and will not work with Router interface from Group().
-func (g *RouteGroup) RegisterListTasks(handler TaskServiceHandler, middlewares ...Middleware) {
-	_ = RegisterListTasksRoute(g, handler, middlewares...)
-}
-
 // RegisterCompleteTaskRoute registers the CompleteTask handler.
 // This registers all HTTP bindings for this method (1 binding(s)).
 // Returns an error if router or handler is nil.
@@ -323,14 +466,6 @@ func RegisterCompleteTaskRoute(r Routes, handler TaskServiceHandler, middlewares
 	h := applyMiddlewares(http.HandlerFunc(handler.HandleCompleteTask), middlewares)
 	r.HandleFunc(http.MethodPost, "/api/v1/tasks/{task_id}/complete", h.ServeHTTP)
 	return nil
-}
-
-// RegisterCompleteTask is a convenience method on RouteGroup.
-//
-// Deprecated: Use RegisterCompleteTaskRoute(router, handler, middlewares...) instead.
-// This method does not return errors and will not work with Router interface from Group().
-func (g *RouteGroup) RegisterCompleteTask(handler TaskServiceHandler, middlewares ...Middleware) {
-	_ = RegisterCompleteTaskRoute(g, handler, middlewares...)
 }
 
 // RegisterGetTasksByProjectRoute registers the GetTasksByProject handler.
@@ -348,14 +483,6 @@ func RegisterGetTasksByProjectRoute(r Routes, handler TaskServiceHandler, middle
 	return nil
 }
 
-// RegisterGetTasksByProject is a convenience method on RouteGroup.
-//
-// Deprecated: Use RegisterGetTasksByProjectRoute(router, handler, middlewares...) instead.
-// This method does not return errors and will not work with Router interface from Group().
-func (g *RouteGroup) RegisterGetTasksByProject(handler TaskServiceHandler, middlewares ...Middleware) {
-	_ = RegisterGetTasksByProjectRoute(g, handler, middlewares...)
-}
-
 // RegisterAssignTaskRoute registers the AssignTask handler.
 // This registers all HTTP bindings for this method (1 binding(s)).
 // Returns an error if router or handler is nil.
@@ -369,12 +496,4 @@ func RegisterAssignTaskRoute(r Routes, handler TaskServiceHandler, middlewares .
 	h := applyMiddlewares(http.HandlerFunc(handler.HandleAssignTask), middlewares)
 	r.HandleFunc(http.MethodPost, "/api/v1/projects/{project_id}/tasks/{task_id}/assign/{user_id}", h.ServeHTTP)
 	return nil
-}
-
-// RegisterAssignTask is a convenience method on RouteGroup.
-//
-// Deprecated: Use RegisterAssignTaskRoute(router, handler, middlewares...) instead.
-// This method does not return errors and will not work with Router interface from Group().
-func (g *RouteGroup) RegisterAssignTask(handler TaskServiceHandler, middlewares ...Middleware) {
-	_ = RegisterAssignTaskRoute(g, handler, middlewares...)
 }

@@ -19,7 +19,7 @@ func setupTestServer() *httptest.Server {
 	taskHandler := handler.NewTaskHandler(taskService)
 
 	router := pb.NewRouter(nil)
-	router.RegisterTaskServiceRoutes(taskHandler)
+	pb.MustRegisterTaskServiceRoutes(router, taskHandler)
 
 	return httptest.NewServer(router)
 }
@@ -356,7 +356,7 @@ func TestEditionsE2E_MiddlewareChain(t *testing.T) {
 
 	router := pb.NewRouter(nil)
 	router.Use(testMiddleware)
-	router.RegisterTaskServiceRoutes(taskHandler)
+	pb.MustRegisterTaskServiceRoutes(router, taskHandler)
 
 	server := httptest.NewServer(router)
 	defer server.Close()
@@ -384,8 +384,12 @@ func TestEditionsE2E_RouteSpecificMiddleware(t *testing.T) {
 	}
 
 	router := pb.NewRouter(nil)
-	router.RegisterCreateTask(taskHandler, createMiddleware)
-	router.RegisterListTasks(taskHandler) // No middleware
+	if err := pb.RegisterCreateTaskRoute(router, taskHandler, createMiddleware); err != nil {
+		t.Fatal(err)
+	}
+	if err := pb.RegisterListTasksRoute(router, taskHandler); err != nil {
+		t.Fatal(err)
+	}
 
 	server := httptest.NewServer(router)
 	defer server.Close()
@@ -434,7 +438,7 @@ func TestEditionsE2E_SharedServeMux(t *testing.T) {
 	taskService := service.NewTaskService()
 	taskHandler := handler.NewTaskHandler(taskService)
 	taskRouter := pb.NewRouter(sharedMux)
-	taskRouter.RegisterTaskServiceRoutes(taskHandler)
+	pb.MustRegisterTaskServiceRoutes(taskRouter, taskHandler)
 
 	// Add a custom health endpoint
 	sharedMux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {

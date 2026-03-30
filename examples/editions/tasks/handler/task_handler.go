@@ -9,8 +9,11 @@ import (
 	"github.com/farhaan/protoc-gen-go-http-server-interface/examples/editions/tasks/service"
 )
 
-// TaskHandler implements pb.TaskServiceHandler
+// TaskHandler implements pb.TaskServiceHandler.
+// Embedding pb.UnimplementedTaskServiceHandler ensures new RPCs added to the
+// proto will not cause compile errors until they are explicitly implemented.
 type TaskHandler struct {
+	pb.UnimplementedTaskServiceHandler
 	svc *service.TaskService
 }
 

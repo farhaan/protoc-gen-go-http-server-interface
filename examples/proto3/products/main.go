@@ -1,8 +1,14 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	productHandler "github.com/farhaan/protoc-gen-go-http-server-interface/examples/proto3/products/handler/product"
@@ -53,6 +59,8 @@ func RateLimiter(requestsPerMinute int) Middleware {
 }
 
 func main() {
+	var ready atomic.Bool
+
 	// Create a shared ServeMux
 	sharedMux := http.NewServeMux()
 
@@ -67,7 +75,7 @@ func main() {
 	// Create service and handler instances
 	productService := productSvc.NewProductService()
 	productHandler := productHandler.NewProductHandler(productService)
-	productRouter.RegisterProductServiceRoutes(productHandler)
+	_ = productPb.RegisterProductServiceRoutes(productRouter, productHandler)
 
 	userService := userSvc.NewUserService()
 	userHandler := userHandler.NewUserHandler(userService)
@@ -100,16 +108,50 @@ func main() {
 	_ = userPb.RegisterListUsersRoute(v1Users, userHandler, userPb.Middleware(RateLimiter(30)))
 	_ = userPb.RegisterCreateUserRoute(v1Users, userHandler)
 
-	// Add some paths that would normally conflict, but don't because of method+path specificity
-	productRouter.HandleFunc("GET", "/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Products service is healthy"))
+	// Kubernetes health probes registered directly on the shared mux so they
+	// are reachable regardless of which service router handles a given prefix.
+	sharedMux.HandleFunc("GET /healthz/live", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	sharedMux.HandleFunc("GET /healthz/ready", func(w http.ResponseWriter, r *http.Request) {
+		if !ready.Load() {
+			http.Error(w, "not ready", http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	sharedMux.HandleFunc("GET /healthz/startup", func(w http.ResponseWriter, r *http.Request) {
+		if !ready.Load() {
+			http.Error(w, "starting", http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
 	})
 
-	userRouter.HandleFunc("POST", "/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Users service received health check"))
-	})
+	srv := &http.Server{
+		Addr:         ":8080",
+		Handler:      sharedMux,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
 
-	// Start the server
-	log.Println("Starting HTTP server on :8080")
-	log.Fatal(http.ListenAndServe(":8080", sharedMux))
+	go func() {
+		log.Println("Starting HTTP server on :8080")
+		ready.Store(true)
+		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("ListenAndServe: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Shutdown: %v", err)
+	}
+	log.Println("Server stopped")
 }

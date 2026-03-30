@@ -89,9 +89,8 @@ func TestRegressionRouteGroupGeneration(t *testing.T) {
 	// Check RouteGroup-specific patterns
 	routeGroupPatterns := []string{
 		"type RouteGroup struct",
-		"func (g *RouteGroup) RegisterGetData",
+		"func RegisterGetDataRoute",
 		"func NewRouter(mux *http.ServeMux)",
-		"func DefaultRouter()",
 	}
 
 	for _, pattern := range routeGroupPatterns {
@@ -206,9 +205,8 @@ func TestRegressionOutputFilenames(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			g := New()
-			g.Options = test.options
 
-			result := g.getOutputFilename(test.protoFile)
+			result := g.getOutputFilename(test.protoFile, test.options)
 			if result != test.expectedFile {
 				t.Errorf("getOutputFilename(%q) = %q, expected %q",
 					test.protoFile, result, test.expectedFile)
@@ -429,7 +427,6 @@ func TestRegressionTemplateExecution(t *testing.T) {
 		"HandleEcho(w http.ResponseWriter, r *http.Request)",
 		"func RegisterEchoServiceRoutes(r Routes, handler EchoServiceHandler)",
 		"func RegisterEchoRoute(r Routes, handler EchoServiceHandler, middlewares ...Middleware)",
-		"func (g *RouteGroup) RegisterEcho(handler EchoServiceHandler, middlewares ...Middleware)",
 		"h := applyMiddlewares(http.HandlerFunc(handler.HandleEcho), middlewares)",
 		"r.HandleFunc(http.MethodPost, \"/echo\", h.ServeHTTP)",
 	}

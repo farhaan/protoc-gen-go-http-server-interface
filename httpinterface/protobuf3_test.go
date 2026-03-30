@@ -113,6 +113,15 @@ func TestProto3EnumHandling(t *testing.T) {
 	}
 }
 
+// mkMethod builds a minimal MethodDescriptorProto for use in table-driven tests.
+func mkMethod(name string) *descriptorpb.MethodDescriptorProto {
+	return &descriptorpb.MethodDescriptorProto{
+		Name:       proto.String(name),
+		InputType:  proto.String(".test.Request"),
+		OutputType: proto.String(".test.Response"),
+	}
+}
+
 // Test comprehensive HTTP method support
 func TestHTTPMethodSupport(t *testing.T) {
 	t.Parallel()
@@ -146,12 +155,12 @@ func TestHTTPMethodSupport(t *testing.T) {
 			{
 				Name: proto.String("TestService"),
 				Method: []*descriptorpb.MethodDescriptorProto{
-					{Name: proto.String("GetMethod"), InputType: proto.String(".test.Request"), OutputType: proto.String(".test.Response")},
-					{Name: proto.String("PostMethod"), InputType: proto.String(".test.Request"), OutputType: proto.String(".test.Response")},
-					{Name: proto.String("PutMethod"), InputType: proto.String(".test.Request"), OutputType: proto.String(".test.Response")},
-					{Name: proto.String("DeleteMethod"), InputType: proto.String(".test.Request"), OutputType: proto.String(".test.Response")},
-					{Name: proto.String("PatchMethod"), InputType: proto.String(".test.Request"), OutputType: proto.String(".test.Response")},
-					{Name: proto.String("CustomMethod"), InputType: proto.String(".test.Request"), OutputType: proto.String(".test.Response")},
+					mkMethod("GetMethod"),
+					mkMethod("PostMethod"),
+					mkMethod("PutMethod"),
+					mkMethod("DeleteMethod"),
+					mkMethod("PatchMethod"),
+					mkMethod("CustomMethod"),
 				},
 			},
 		},
@@ -297,11 +306,6 @@ func TestGeneratedCodePatterns(t *testing.T) {
 
 		// Router functions
 		"func NewRouter(mux *http.ServeMux)",
-		"func DefaultRouter()",
-
-		// RouteGroup methods
-		"func (g *RouteGroup) RegisterGetUser",
-		"func (g *RouteGroup) RegisterCreateUser",
 
 		// HTTP method handling
 		"http.MethodGet",
