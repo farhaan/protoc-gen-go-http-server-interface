@@ -16,8 +16,3 @@ linters:
     - govet
     - staticcheck
     - gocyclo
-
-issues:
-  exclude-dirs:
-    - vendor
-    - .git
